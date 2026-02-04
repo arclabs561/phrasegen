@@ -68,6 +68,7 @@ cargo run -- sample-passphrases \
 - **`sampling.accept_rate`**: how tight your constraints are (rejection sampling rate).
 
 For the math and interpretation, see `docs/math.md`.
+For a compact set of deeper notes (usage, datasets, math), start at `docs/README.md`.
 
 ## Public data sources (base model)
 
