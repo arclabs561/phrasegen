@@ -33,12 +33,10 @@ Notes:
 
 ## Docs (appendix)
 
-Start at `docs/README.md`:
-- `docs/guide.md`: day-to-day workflows (including constraints, styles, and diagnostics)
+Start at `docs/README.md`, or jump directly:
+- `docs/guide.md`: how to run it day-to-day (constraints, styles, diagnostics)
 - `docs/datasets.md`: what we download and how it becomes rows
-- `docs/math.md`: math + interpretation notes
-
-For details on constraints/styles/diagnostics, read `docs/guide.md`.
+- `docs/math.md`: equations + interpretation notes
 
 ## Public data sources (base model)
 
