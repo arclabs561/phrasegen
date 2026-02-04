@@ -21,14 +21,6 @@ The one-shot `base-pipeline` runs equivalent steps for you.
 ## Which datasets?
 
 The concrete download URLs and parsers are defined in code (see `src/import.rs` and the `download-datasets` command).
-At a high level, the union is built from multiple public keystroke-dynamics sources, including:
-
-- CMU DSL “Strong Password” dataset
-- BKSD (zipped dataset files in a public repo)
-- GREYC webkeystroke
-- CMU LASER-2012 digraph features
-- KeyRecs (free-text features)
-
 If you need an audit trail (exact URLs, file names, parse assumptions), treat `src/import.rs` as the source of truth.
 
 ## What “rows” look like

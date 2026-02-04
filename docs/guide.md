@@ -23,49 +23,6 @@ cargo run -- score --model data/user/model_personalized.json --phrase "correct-h
 
 If you use `just`, the same workflows are wrapped in `justfile` recipes: run `just --list`.
 
-## Typical workflow
-
-### 1) Build a base model and wordset (public-only)
-
-```bash
-cargo run -- base-pipeline --out-dir data/base --target-bits 60 --words 4 --seed 1
-```
-
-Artifacts written under `data/base/`:
-- `model_union.json`: timing model fit from unioned public typing data
-- `corpus.txt`: frequency-ish corpus used for planning
-- `wordset.txt`: planned wordset for the requested bits/words
-
-### 2) Record your typing (optional, accumulates)
-
-```bash
-cargo run -- record-session --reps 20 --output data/user/user.jsonl
-```
-
-### 3) Personalize (optional)
-
-```bash
-cargo run -- personalize-pipeline \
-  --base-dir data/base \
-  --user-data data/user/user.jsonl \
-  --out-dir data/user \
-  --target-bits 60 \
-  --words 4 \
-  --seed 1
-```
-
-### 4) Sample passphrases
-
-```bash
-cargo run -- sample-passphrases \
-  --model data/user/model_personalized.json \
-  --wordlist data/user/wordset_user.txt \
-  --words 4 \
-  --count 10 \
-  --max-chars 32 \
-  --seed 1
-```
-
 ## “Login password” formatting (no spaces, caps + numbers)
 
 Use the built-in style presets:

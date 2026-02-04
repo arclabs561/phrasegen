@@ -38,48 +38,7 @@ Start at `docs/README.md`:
 - `docs/datasets.md`: what we download and how it becomes rows
 - `docs/math.md`: math + interpretation notes
 
-## Core commands you’ll actually use
-
-- **Build base artifacts**:
-
-```bash
-cargo run -- base-pipeline --out-dir data/base --target-bits 60 --words 4 --seed 1
-```
-
-- **Record typing** (interactive; appends JSONL):
-
-```bash
-cargo run -- record-session --reps 20 --output data/user/user.jsonl
-```
-
-- **Personalize** (base → personalized model + planned wordset):
-
-```bash
-cargo run -- personalize-pipeline --base-dir data/base --user-data data/user/user.jsonl --out-dir data/user --target-bits 60 --words 4 --seed 1
-```
-
-- **Sample passphrases** (constraints + optional regex gaps/prefix/suffix):
-
-```bash
-cargo run -- sample-passphrases \
-  --model data/user/model_personalized.json \
-  --wordlist data/user/wordset_user.txt \
-  --words 4 \
-  --count 10 \
-  --gap-regex '[-_.]{1,2}[0-9]{0,2}' \
-  --max-chars 32 \
-  --seed 1
-```
-
-## What the output fields mean
-
-- **`predicted_ms`**: predicted total entry time under the timing model.
-- **`digraph_hit_frac` / `hit_frac`**: fraction of digraphs scored using learned digraph means (vs fallback/backoff).
-- **`normalized_vs_global` / `norm`**: normalized speed vs the model’s global mean digraph speed.
-- **`shift`**: heuristic fraction of characters that likely require shift on a US layout.
-- **`sampling.accept_rate`**: how tight your constraints are (rejection sampling rate).
-
-For the math and interpretation, see `docs/math.md`.
+For details on constraints/styles/diagnostics, read `docs/guide.md`.
 
 ## Public data sources (base model)
 

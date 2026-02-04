@@ -1,7 +1,5 @@
 # Math notes
 
-This file uses `$...$` (inline) and `$$...$$` (block) math in Markdown, and intentionally avoids `\(...\)` / `\[...\]`.
-
 This project uses a simple **digraph timing model** and reports a mix of:
 
 - **Typing-time predictions** (from the timing model)
