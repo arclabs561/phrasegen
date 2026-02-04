@@ -2,3 +2,4 @@ target/
 **/*.rs.bk
 data/**
 !data/example.csv
+artifacts/
