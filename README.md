@@ -112,6 +112,11 @@ cargo run -- sample-passphrases \
 
 It prints `fast_pct` where **higher is faster** (e.g. `fast_pct=90` means “faster than ~90% of reference samples”).
 
+When `--meta` is enabled, we also print:
+- `norm`: \( \widehat{T}(s) / (m \cdot \mu_{global}) \) where \(m\) is digraph count; \<1 means “faster than average digraph”.
+- `ms/dg`: \( \widehat{T}(s) / m \) (ms per digraph), a length-normalized speed.
+- `shift`: fraction of characters that likely require shift on a US layout (heuristic).
+
 ## 1Password-style “Memorable Password” separators
 
 1Password’s generator offers a “Memorable” password type with options including **hyphen separators**, and (per 1Password staff) separators that are **Numbers** or **Numbers and Symbols** instead of hyphens.

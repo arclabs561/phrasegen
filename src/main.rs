@@ -3094,6 +3094,47 @@ fn main() -> anyhow::Result<()> {
             percentile_samples,
             max_tries,
         } => {
+            fn is_shift_us(ch: char) -> bool {
+                ch.is_ascii_uppercase()
+                    || matches!(
+                        ch,
+                        '!' | '@'
+                            | '#'
+                            | '$'
+                            | '%'
+                            | '^'
+                            | '&'
+                            | '*'
+                            | '('
+                            | ')'
+                            | '_'
+                            | '+'
+                            | '{'
+                            | '}'
+                            | '|'
+                            | ':'
+                            | '"'
+                            | '<'
+                            | '>'
+                            | '?'
+                    )
+            }
+            fn shift_frac_us(s: &str) -> f64 {
+                let mut n = 0usize;
+                let mut sh = 0usize;
+                for ch in s.chars() {
+                    n += 1;
+                    if is_shift_us(ch) {
+                        sh += 1;
+                    }
+                }
+                if n == 0 {
+                    0.0
+                } else {
+                    (sh as f64) / (n as f64)
+                }
+            }
+
             if count == 0 {
                 anyhow::bail!("count must be >= 1");
             }
@@ -3400,6 +3441,17 @@ fn main() -> anyhow::Result<()> {
 
                 let sc0 = fastphrase::score::score_phrase(&model, &phrase);
                 let ms0 = sc0.predicted_ms as f64;
+                let digraphs0 = sc0.digraphs.max(1) as f64;
+                let ms_per_digraph0 = ms0 / digraphs0;
+                let norm0 = {
+                    let denom = (sc0.digraphs as f64) * (model.global_mean_ms() as f64);
+                    if denom > 0.0 {
+                        ms0 / denom
+                    } else {
+                        0.0
+                    }
+                };
+                let shift0 = shift_frac_us(&phrase);
                 if meta || percentile {
                     let hit_frac = if sc0.digraphs == 0 {
                         0.0
@@ -3409,13 +3461,13 @@ fn main() -> anyhow::Result<()> {
                     if let Some(ref_ms) = ref_sorted_ms.as_ref() {
                         let pct = fast_pct(ms0, ref_ms);
                         println!(
-                            "{:>9.3} ms  fast_pct={:>6.2}  hit_frac={:.3}  chars={}  {}",
-                            ms0, pct, hit_frac, clen, phrase
+                            "{:>9.3} ms  fast_pct={:>6.2}  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  hit_frac={:.3}  chars={}  {}",
+                            ms0, pct, norm0, ms_per_digraph0, shift0, hit_frac, clen, phrase
                         );
                     } else {
                         println!(
-                            "{:>9.3} ms  hit_frac={:.3}  chars={}  {}",
-                            ms0, hit_frac, clen, phrase
+                            "{:>9.3} ms  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  hit_frac={:.3}  chars={}  {}",
+                            ms0, norm0, ms_per_digraph0, shift0, hit_frac, clen, phrase
                         );
                     }
                 } else {
@@ -3480,26 +3532,43 @@ fn main() -> anyhow::Result<()> {
                     if take > 0 {
                         println!("  alternatives ({:?}):", alt_mode);
                         for a in cand.into_iter().take(take) {
+                            let sca = fastphrase::score::score_phrase(&model, &a.phrase);
+                            let norma = {
+                                let denom = (sca.digraphs as f64) * (model.global_mean_ms() as f64);
+                                if denom > 0.0 {
+                                    a.ms / denom
+                                } else {
+                                    0.0
+                                }
+                            };
+                            let ms_per_dga = a.ms / (sca.digraphs.max(1) as f64);
+                            let shifta = shift_frac_us(&a.phrase);
                             if let Some(ref_ms) = ref_sorted_ms.as_ref() {
                                 let pct = fast_pct(a.ms, ref_ms);
                                 println!(
-                                   "   - {:>9.3} ms  fast_pct={:>6.2}  (Δ{:+.3})  swap_pos={} -> {}  {}",
-                                   a.ms,
-                                   pct,
-                                   a.ms - ms0,
-                                   a.pos + 1,
-                                   a.word,
-                                   a.phrase
-                               );
-                            } else {
-                                println!(
-                                    "   - {:>9.3} ms  (Δ{:+.3})  swap_pos={} -> {}  {}",
+                                    "   - {:>9.3} ms  fast_pct={:>6.2}  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  (Δ{:+.3})  swap_pos={} -> {}  {}",
                                     a.ms,
+                                    pct,
+                                    norma,
+                                    ms_per_dga,
+                                    shifta,
                                     a.ms - ms0,
                                     a.pos + 1,
                                     a.word,
                                     a.phrase
-                                );
+                               );
+                            } else {
+                                println!(
+                                    "   - {:>9.3} ms  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  (Δ{:+.3})  swap_pos={} -> {}  {}",
+                                    a.ms,
+                                    norma,
+                                    ms_per_dga,
+                                    shifta,
+                                    a.ms - ms0,
+                                    a.pos + 1,
+                                    a.word,
+                                    a.phrase
+                               );
                             }
                         }
                     }
