@@ -2,6 +2,27 @@
 
 This is the “what do I actually run?” page. The root `README.md` stays short; this file keeps the practical details.
 
+## Cheat sheet (5 commands)
+
+```bash
+# base model + wordset
+cargo run -- base-pipeline --out-dir data/base --target-bits 60 --words 4 --seed 1
+
+# append typing data
+cargo run -- record-session --reps 20 --output data/user/user.jsonl
+
+# personalize (writes model + wordset under data/user/)
+cargo run -- personalize-pipeline --base-dir data/base --user-data data/user/user.jsonl --out-dir data/user --target-bits 60 --words 4 --seed 1
+
+# sample passphrases
+cargo run -- sample-passphrases --model data/user/model_personalized.json --wordlist data/user/wordset_user.txt --words 4 --count 10 --max-chars 32 --seed 1
+
+# score an arbitrary string
+cargo run -- score --model data/user/model_personalized.json --phrase "correct-horse-battery-staple"
+```
+
+If you use `just`, the same workflows are wrapped in `justfile` recipes: run `just --list`.
+
 ## Typical workflow
 
 ### 1) Build a base model and wordset (public-only)
@@ -86,4 +107,9 @@ cargo run -- sample-passphrases \
 - `--meta`: print `norm`, `ms/dg`, `shift`, `hit_frac` per sample
 - `--percentile`: calibrate a “fastness percentile” against the same generator settings
 - `--alternatives N`: show near-by alternatives (note: manual choice introduces bias)
+
+## Common pitfalls
+
+- If `sampling.accept_rate` is very low, your constraints are too tight (e.g. `--max-chars` too small for your chosen `--style`/`--words`).
+- Alternatives are great for tuning, but manual selection changes the distribution (and therefore effective entropy).
 

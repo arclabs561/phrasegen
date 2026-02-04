@@ -3,3 +3,12 @@ target/
 data/**
 !data/example.csv
 artifacts/
+.DS_Store
+.env
+.env.*
+.vscode/
+.idea/
+*.log
+*.tmp
+*.swp
+*.swo

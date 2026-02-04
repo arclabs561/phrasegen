@@ -4,6 +4,11 @@ Generate and score passphrase-style strings using a learned **typing-timing mode
 
 This repo is designed to “just work” from public datasets, and optionally adapt to your own typing over time.
 
+## Requirements
+
+- Rust toolchain (see `Cargo.toml` `rust-version`)
+- Optional: [`just`](https://github.com/casey/just) for the convenience recipes in `justfile`
+
 ## Quick start (golden path)
 
 From the repo root:
@@ -25,6 +30,13 @@ just sample data/user/model_personalized.json data/user/wordset_user.txt 10
 Notes:
 - Generated artifacts live under `data/` and are ignored by default (see `.gitignore`).
 - Run `cargo run -- --help` to see the full CLI.
+
+## Docs (appendix)
+
+Start at `docs/README.md`:
+- `docs/guide.md`: day-to-day workflows (including constraints, styles, and diagnostics)
+- `docs/datasets.md`: what we download and how it becomes rows
+- `docs/math.md`: math + interpretation notes
 
 ## Core commands you’ll actually use
 
@@ -68,7 +80,6 @@ cargo run -- sample-passphrases \
 - **`sampling.accept_rate`**: how tight your constraints are (rejection sampling rate).
 
 For the math and interpretation, see `docs/math.md`.
-For a compact set of deeper notes (usage, datasets, math), start at `docs/README.md`.
 
 ## Public data sources (base model)
 
