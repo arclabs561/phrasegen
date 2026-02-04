@@ -9,29 +9,53 @@ This repo is designed to “just work” from public datasets, and optionally ad
 - Rust toolchain (see `Cargo.toml` `rust-version`)
 - Optional: [`just`](https://github.com/casey/just) for the convenience recipes in `justfile`
 
-## Quick start (golden path)
+## Quick start (what to run)
 
 From the repo root:
 
 ```bash
-# 1) Build a base model + corpus + planned wordset (public typing data + public corpus)
+# 1) Build a base model + corpus + wordset (public typing data + public corpus)
 just base data/base
 
-# 2) Record your typing over time (appends to data/user/user.jsonl)
+# 2) Record your typing (appends to data/user/user.jsonl)
 just record 20
 
-# 3) Build a personalized model + personalized wordset
+# 3) Personalize (writes data/user/model_personalized.json + data/user/wordset_user.txt)
 just personalize data/base data/user
 
-# 4) Sample outputs (with predicted ms)
+# 4) Sample outputs (predicted ms + passphrase text)
 just sample data/user/model_personalized.json data/user/wordset_user.txt 10
 ```
 
 Notes:
 - Generated artifacts live under `data/` and are ignored by default (see `.gitignore`).
-- Run `cargo run -- --help` to see the full CLI.
+- Run `cargo run -- --help` to see the full CLI, or `just --list` for recipes.
 
-## Docs (appendix)
+## Deterministic demo output (seed=42)
+
+If you want stable, copy/pastable examples for docs/issues, use the built-in demo recipe:
+
+```bash
+# Default: numbers-symbols, seed=42
+just demo
+
+# “Best-of-N” demo: for each printed sample, draw N candidates and keep the fastest one.
+# (This intentionally biases the distribution; it’s for showcasing faster examples.)
+just demo numbers-symbols 42 10 32 10
+```
+
+Behind the scenes this runs:
+
+```bash
+cargo run -- sample-passphrases \
+  --model data/user/model_personalized.json \
+  --wordlist data/user/wordset_user.txt \
+  --style numbers-symbols \
+  --seed 42 \
+  --pick-best-of 10
+```
+
+## Docs (next stop)
 
 Start at `docs/README.md`, or jump directly:
 - `docs/guide.md`: how to run it day-to-day (constraints, styles, diagnostics)
