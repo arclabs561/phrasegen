@@ -89,6 +89,29 @@ cargo run -- sample-passphrases \
 Security note: choosing among alternatives manually introduces user bias. Treat alternatives as a **debugging/tuning tool**
 unless you also randomize the final choice.
 
+### Fastness percentile (interpretability)
+
+To make “how fast is this?” easier to interpret, `sample-passphrases` can optionally calibrate a **fastness percentile**
+against the same generator settings (style/case/regex/constraints) using Monte Carlo reference sampling:
+
+```bash
+cargo run -- sample-passphrases \
+  --model data/base12/model_union.json \
+  --wordlist data/base12/wordset.txt \
+  --style numbers-symbols \
+  --words 4 \
+  --count 3 \
+  --max-chars 28 \
+  --alternatives 3 \
+  --alt-tries 120 \
+  --percentile \
+  --percentile-samples 5000 \
+  --meta \
+  --seed 1
+```
+
+It prints `fast_pct` where **higher is faster** (e.g. `fast_pct=90` means “faster than ~90% of reference samples”).
+
 ## 1Password-style “Memorable Password” separators
 
 1Password’s generator offers a “Memorable” password type with options including **hyphen separators**, and (per 1Password staff) separators that are **Numbers** or **Numbers and Symbols** instead of hyphens.

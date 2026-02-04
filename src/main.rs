@@ -707,6 +707,15 @@ enum Command {
         /// If true, print extra per-sample metadata (chars, hit_frac).
         #[arg(long, default_value_t = false)]
         meta: bool,
+        /// If set, also print a “fastness percentile” for each output (and its alternatives).
+        ///
+        /// This is calibrated against the same generator configuration (style/case/regex/constraints),
+        /// via Monte Carlo sampling. Higher means “faster than more reference samples”.
+        #[arg(long, default_value_t = false)]
+        percentile: bool,
+        /// Reference samples used to estimate the fastness percentile CDF.
+        #[arg(long, default_value_t = 10_000)]
+        percentile_samples: usize,
         /// Max attempts per output (avoid infinite loops under tight constraints).
         #[arg(long, default_value_t = 50_000)]
         max_tries: usize,
@@ -3081,6 +3090,8 @@ fn main() -> anyhow::Result<()> {
             alt_tries,
             alt_mode,
             meta,
+            percentile,
+            percentile_samples,
             max_tries,
         } => {
             if count == 0 {
@@ -3281,6 +3292,83 @@ fn main() -> anyhow::Result<()> {
                 })
             };
 
+            // Optional calibration distribution for fastness percentile.
+            // We sample predicted_ms under the *same* generator config and constraints.
+            let mut ref_sorted_ms: Option<Vec<f64>> = None;
+            if percentile {
+                if percentile_samples == 0 {
+                    anyhow::bail!("percentile_samples must be >= 1 when --percentile is set");
+                }
+                let want = percentile_samples;
+                let max_ref_tries = want.saturating_mul(200).max(want);
+                let mut tries = 0usize;
+                let mut v: Vec<f64> = Vec::with_capacity(want);
+                // Deterministic-ish reference sampling when seed is set.
+                let mut rng_ref = rng_from_seed(seed.map(|s| s ^ 0x2a9d_1c41_5c18_aa71));
+                let mut rng_gap_ref = match seed {
+                    Some(s) => rand08::rngs::StdRng::seed_from_u64(s ^ 0xa54f_9d83_2c1f_ba7d),
+                    None => rand08::rngs::StdRng::from_entropy(),
+                };
+                while v.len() < want {
+                    tries += 1;
+                    if tries > max_ref_tries {
+                        anyhow::bail!(
+                            "failed to build percentile reference distribution: got {}/{} samples within {} tries; loosen constraints or increase max_chars",
+                            v.len(),
+                            want,
+                            max_ref_tries
+                        );
+                    }
+                    let parts = make_one(&mut rng_ref, &mut rng_gap_ref)?;
+                    let phrase = assemble(&parts);
+                    let clen = phrase.chars().count();
+                    if let Some(maxc) = max_chars {
+                        if clen > maxc {
+                            continue;
+                        }
+                    }
+                    if let Some(minc) = min_chars {
+                        if clen < minc {
+                            continue;
+                        }
+                    }
+                    let ms = fastphrase::score::score_phrase(&model, &phrase).predicted_ms as f64;
+                    v.push(ms);
+                }
+                v.sort_by(|a, b| a.total_cmp(b));
+                let n = v.len().max(1);
+                let at = |p: f64| -> f64 {
+                    let idx = ((p * ((n - 1) as f64)).round() as usize).min(n - 1);
+                    v[idx]
+                };
+                println!("percentile_ref.samples: {}", v.len());
+                println!(
+                    "percentile_ref.ms_quantiles(p50/p90/p95/p99): {:.3}/{:.3}/{:.3}/{:.3}",
+                    at(0.50),
+                    at(0.90),
+                    at(0.95),
+                    at(0.99)
+                );
+                println!("percentile_ref.note: fast_pct=percent_of_ref_ms_slower_than_this (higher is faster)");
+                println!();
+                ref_sorted_ms = Some(v);
+            }
+
+            let fast_pct = |ms: f64, ref_sorted_ms: &Vec<f64>| -> f64 {
+                // ref_sorted_ms is ascending (fast -> slow).
+                // fast_pct = fraction of reference samples slower than this (ms_ref > ms).
+                if ref_sorted_ms.is_empty() {
+                    return 0.0;
+                }
+                let n = ref_sorted_ms.len();
+                let idx = match ref_sorted_ms.binary_search_by(|x| x.total_cmp(&ms)) {
+                    Ok(i) | Err(i) => i,
+                };
+                let faster_or_equal = idx; // ref_ms <= ms
+                let slower = n.saturating_sub(faster_or_equal);
+                100.0 * (slower as f64) / (n as f64)
+            };
+
             if alternatives > 0 {
                 println!(
                     "note: alternatives_enabled; choosing manually reduces effective entropy unless randomized"
@@ -3312,16 +3400,24 @@ fn main() -> anyhow::Result<()> {
 
                 let sc0 = fastphrase::score::score_phrase(&model, &phrase);
                 let ms0 = sc0.predicted_ms as f64;
-                if meta {
+                if meta || percentile {
                     let hit_frac = if sc0.digraphs == 0 {
                         0.0
                     } else {
                         (sc0.hits as f64) / (sc0.digraphs as f64)
                     };
-                    println!(
-                        "{:>9.3} ms  hit_frac={:.3}  chars={}  {}",
-                        ms0, hit_frac, clen, phrase
-                    );
+                    if let Some(ref_ms) = ref_sorted_ms.as_ref() {
+                        let pct = fast_pct(ms0, ref_ms);
+                        println!(
+                            "{:>9.3} ms  fast_pct={:>6.2}  hit_frac={:.3}  chars={}  {}",
+                            ms0, pct, hit_frac, clen, phrase
+                        );
+                    } else {
+                        println!(
+                            "{:>9.3} ms  hit_frac={:.3}  chars={}  {}",
+                            ms0, hit_frac, clen, phrase
+                        );
+                    }
                 } else {
                     println!("{:>9.3} ms  {}", ms0, phrase);
                 }
@@ -3384,14 +3480,27 @@ fn main() -> anyhow::Result<()> {
                     if take > 0 {
                         println!("  alternatives ({:?}):", alt_mode);
                         for a in cand.into_iter().take(take) {
-                            println!(
-                                "   - {:>9.3} ms  (Δ{:+.3})  swap_pos={} -> {}  {}",
-                                a.ms,
-                                a.ms - ms0,
-                                a.pos + 1,
-                                a.word,
-                                a.phrase
-                            );
+                            if let Some(ref_ms) = ref_sorted_ms.as_ref() {
+                                let pct = fast_pct(a.ms, ref_ms);
+                                println!(
+                                   "   - {:>9.3} ms  fast_pct={:>6.2}  (Δ{:+.3})  swap_pos={} -> {}  {}",
+                                   a.ms,
+                                   pct,
+                                   a.ms - ms0,
+                                   a.pos + 1,
+                                   a.word,
+                                   a.phrase
+                               );
+                            } else {
+                                println!(
+                                    "   - {:>9.3} ms  (Δ{:+.3})  swap_pos={} -> {}  {}",
+                                    a.ms,
+                                    a.ms - ms0,
+                                    a.pos + 1,
+                                    a.word,
+                                    a.phrase
+                                );
+                            }
                         }
                     }
                 }
