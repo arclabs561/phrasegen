@@ -225,6 +225,10 @@ word-marginal entropy diagnostic that’s sensitive to “pick best of M” bias
 These are estimated by the plugin (empirical) counts of observed outputs. When the space is enormous, you may see **no repeats**
 at 20k–200k samples; in that regime, the plugin estimator is **sample-size-limited**, and you should treat it as a lower bound.
 
+In addition, when there are **0 observed collisions** among \(n\) samples, we print a simple 95% upper bound on collision
+probability \(p_2\) (hence a lower bound on \(H_2\)) using a binomial approximation over the \(\binom{n}{2}\) sample pairs:
+\(p_2 \lesssim -\ln(0.05) / \binom{n}{2}\).
+
 Two mechanisms reduce entropy in practice:
 
 - **Rejection sampling**: `--max-chars`/`--min-chars` filters proposals. The resulting distribution is the proposal distribution

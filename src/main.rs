@@ -3542,6 +3542,33 @@ fn main() -> anyhow::Result<()> {
                 let h_inf = if p_max > 0.0 { -log2_f64(p_max) } else { 0.0 };
                 (h1, h2, h_inf, s_p2)
             }
+            fn collision_pairs(counts: &HashMap<String, u32>) -> u64 {
+                // number of equal pairs among n draws: sum_x C(c_x, 2)
+                counts
+                    .values()
+                    .map(|&c| {
+                        let c = c as u64;
+                        c.saturating_mul(c.saturating_sub(1)) / 2
+                    })
+                    .sum()
+            }
+            fn n_pairs(n: u64) -> u64 {
+                n.saturating_mul(n.saturating_sub(1)) / 2
+            }
+            fn p2_upper_bound_zero_collisions(n: u64, alpha: f64) -> Option<f64> {
+                // If we observe 0 collisions among Npairs pairwise comparisons, then under
+                // a crude (but useful) binomial approximation, P(0) = (1 - p2)^Npairs.
+                // Solve for an upper bound p2 s.t. P(0) = alpha:
+                //   p2 <= 1 - alpha^(1/Npairs) ≈ -ln(alpha) / Npairs
+                let np = n_pairs(n);
+                if np == 0 {
+                    return None;
+                }
+                if !(0.0 < alpha && alpha < 1.0) {
+                    return None;
+                }
+                Some(-alpha.ln() / (np as f64))
+            }
             fn top_k_counts(counts: &HashMap<String, u32>, k: usize) -> Vec<(String, u32)> {
                 let mut v: Vec<(String, u32)> =
                     counts.iter().map(|(s, &c)| (s.clone(), c)).collect();
@@ -3965,6 +3992,9 @@ fn main() -> anyhow::Result<()> {
                 println!("  unique_outputs: {}", counts.len());
                 let repeats = (n as i64) - (counts.len() as i64);
                 println!("  observed_repeats: {}", repeats.max(0));
+                let cpairs = collision_pairs(counts);
+                let npairs = n_pairs(n);
+                println!("  observed_collision_pairs: {} / {}", cpairs, npairs);
                 println!(
                     "  ms: mean={:.1} std={:.1} p50={:.1} p95={:.1} p99={:.1}",
                     mmean, mstd, ms_p50, ms_p95, ms_p99
@@ -3989,6 +4019,15 @@ fn main() -> anyhow::Result<()> {
                     println!("  note: no repeats observed -> output-entropy plugin estimate is sample-size-limited (true entropy likely much larger)");
                 }
                 println!("  collision_prob_est: sum_p2≈{:.6}  (so H2≈{:.3})", p2, h2);
+                if cpairs == 0 {
+                    if let Some(p2_ub) = p2_upper_bound_zero_collisions(n, 0.05) {
+                        let h2_lb = if p2_ub > 0.0 { -log2_f64(p2_ub) } else { 0.0 };
+                        println!(
+                            "  collision_bound_95pct: p2 <= {:.6e}  =>  H2 >= {:.3}  (binomial approx, 0 collisions)",
+                            p2_ub, h2_lb
+                        );
+                    }
+                }
                 if h1 > 0.0 {
                     println!("  ms_per_H1_bit (mean): {:.3}", mmean / h1);
                 }
