@@ -16,6 +16,10 @@ default:
 base OUT_DIR="data/base":
   cargo run -- base-pipeline --out-dir {{OUT_DIR}} --target-bits 60 --words 4 --samples 20000 --top 10 --seed 1
 
+# Demo: repeatable sampling with seed=42 (default style: numbers-symbols).
+demo STYLE="numbers-symbols" SEED="42" COUNT="10" MAX_CHARS="32" PICK="1":
+  cargo run -- sample-passphrases --model data/user/model_personalized.json --wordlist data/user/wordset_user.txt --style {{STYLE}} --words 4 --count {{COUNT}} --max-chars {{MAX_CHARS}} --seed {{SEED}} --pick-best-of {{PICK}}
+
 # Download all supported raw datasets into OUT_DIR/datasets.
 download OUT_DIR="data/base":
   cargo run -- download-datasets --out-dir {{OUT_DIR}}/datasets

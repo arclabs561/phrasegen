@@ -675,6 +675,12 @@ enum Command {
         /// RNG seed.
         #[arg(long)]
         seed: Option<u64>,
+        /// For each printed sample, draw N candidates and keep the fastest-to-type one.
+        ///
+        /// This is useful for “show me the best ones”, but it biases the output distribution
+        /// (lower effective entropy unless you randomize the choice process).
+        #[arg(long, default_value_t = 1)]
+        pick_best_of: usize,
         /// Formatting preset (optional convenience).
         #[arg(long, value_enum, default_value_t = SampleStyle::Custom)]
         style: SampleStyle,
@@ -2979,6 +2985,7 @@ fn main() -> anyhow::Result<()> {
             max_chars,
             min_chars,
             seed,
+            pick_best_of,
             style,
             case,
             prefix_regex,
@@ -3020,6 +3027,9 @@ fn main() -> anyhow::Result<()> {
             }
             if words == 0 {
                 anyhow::bail!("words must be >= 1");
+            }
+            if pick_best_of == 0 {
+                anyhow::bail!("pick_best_of must be >= 1");
             }
             if let Some(maxc) = max_chars {
                 if maxc == 0 {
@@ -3306,37 +3316,61 @@ fn main() -> anyhow::Result<()> {
             // Rejection sample until we print count phrases.
             let mut tries = 0usize;
             while out < count {
-                tries += 1;
-                if tries > max_tries {
-                    anyhow::bail!(
-                        "failed to sample enough phrases under constraints: produced {out}/{count} within {max_tries} tries"
-                    );
-                }
-                let parts = make_one(&mut rng, &mut rng_gap)?;
-                let phrase = assemble(&parts);
-                let clen = phrase.chars().count();
-                if let Some(maxc) = max_chars {
-                    if clen > maxc {
-                        continue;
+                // If pick_best_of>1, draw multiple candidates and show the fastest.
+                let mut best_parts: Option<Parts> = None;
+                let mut best_phrase: Option<String> = None;
+                let mut best_sc0: Option<phrasegen::score::Score> = None;
+
+                while best_phrase.is_none() {
+                    for _ in 0..pick_best_of {
+                        tries += 1;
+                        if tries > max_tries {
+                            anyhow::bail!(
+                                "failed to sample enough phrases under constraints: produced {out}/{count} within {max_tries} tries"
+                            );
+                        }
+                        let parts = make_one(&mut rng, &mut rng_gap)?;
+                        let phrase = assemble(&parts);
+                        let clen = phrase.chars().count();
+                        if let Some(maxc) = max_chars {
+                            if clen > maxc {
+                                continue;
+                            }
+                        }
+                        if let Some(minc) = min_chars {
+                            if clen < minc {
+                                continue;
+                            }
+                        }
+                        let sc0 = phrasegen::score::score_phrase(&model, &phrase);
+                        match &best_sc0 {
+                            None => {
+                                best_parts = Some(parts);
+                                best_phrase = Some(phrase);
+                                best_sc0 = Some(sc0);
+                            }
+                            Some(prev) => {
+                                if sc0.predicted_ms < prev.predicted_ms {
+                                    best_parts = Some(parts);
+                                    best_phrase = Some(phrase);
+                                    best_sc0 = Some(sc0);
+                                }
+                            }
+                        }
                     }
-                }
-                if let Some(minc) = min_chars {
-                    if clen < minc {
-                        continue;
-                    }
+                    // If all candidates were rejected by constraints, loop again.
                 }
 
-                let sc0 = phrasegen::score::score_phrase(&model, &phrase);
+                let parts = best_parts.expect("best_parts must be set");
+                let phrase = best_phrase.expect("best_phrase must be set");
+                let sc0 = best_sc0.expect("best_sc0 must be set");
+
                 let ms0 = sc0.predicted_ms as f64;
                 let digraphs0 = sc0.digraphs.max(1) as f64;
                 let ms_per_digraph0 = ms0 / digraphs0;
                 let norm0 = {
                     let denom = (sc0.digraphs as f64) * (model.global_mean_ms() as f64);
-                    if denom > 0.0 {
-                        ms0 / denom
-                    } else {
-                        0.0
-                    }
+                    if denom > 0.0 { ms0 / denom } else { 0.0 }
                 };
                 let shift0 = shift_frac_us(&phrase);
                 if meta || percentile {
@@ -3347,11 +3381,13 @@ fn main() -> anyhow::Result<()> {
                     };
                     if let Some(ref_ms) = ref_sorted_ms.as_ref() {
                         let pct = fast_pct(ms0, ref_ms);
+                        let clen = phrase.chars().count();
                         println!(
                             "{:>9.3} ms  fast_pct={:>6.2}  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  hit_frac={:.3}  chars={}  {}",
                             ms0, pct, norm0, ms_per_digraph0, shift0, hit_frac, clen, phrase
                         );
                     } else {
+                        let clen = phrase.chars().count();
                         println!(
                             "{:>9.3} ms  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  hit_frac={:.3}  chars={}  {}",
                             ms0, norm0, ms_per_digraph0, shift0, hit_frac, clen, phrase
