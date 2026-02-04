@@ -1,6 +1,6 @@
 set dotenv-load := false
 
-# fastphrase: handy automation for common workflows
+# phrasegen: handy automation for common workflows
 #
 # Examples:
 #   just base data/base4
@@ -106,6 +106,6 @@ onepass-numsym MODEL="data/user/model_personalized.json" WORDSET="data/user/word
   cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers-symbols --max-chars {{MAX_CHARS}} --seed 3
 
 # Score the repo name itself.
-score-fastphrase MODEL="data/base/model_union.json":
-  cargo run -- score --model {{MODEL}} --phrase fastphrase
+score-phrasegen MODEL="data/base/model_union.json":
+  cargo run -- score --model {{MODEL}} --phrase phrasegen
 

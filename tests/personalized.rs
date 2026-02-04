@@ -1,6 +1,6 @@
-use fastphrase::data::Row;
-use fastphrase::model::DigraphModel;
-use fastphrase::timing::{build_personalized_model, AnyTimingModel, TimingModel};
+use phrasegen::data::Row;
+use phrasegen::model::DigraphModel;
+use phrasegen::timing::{build_personalized_model, AnyTimingModel, TimingModel};
 
 #[test]
 fn personalized_backoff_imputes_unseen_digraphs() {
@@ -26,7 +26,7 @@ fn personalized_backoff_imputes_unseen_digraphs() {
     let (pm, _adapt, _bstats) = build_personalized_model(
         &base,
         &user_rows,
-        fastphrase::adapt::AdaptConfig {
+        phrasegen::adapt::AdaptConfig {
             prior_count: 0.0,
             min_new_count: 1,
         },
@@ -55,7 +55,7 @@ fn any_timing_model_loads_personalized_and_scores() {
     let (pm, _adapt, _bstats) = build_personalized_model(
         &base,
         &user_rows,
-        fastphrase::adapt::AdaptConfig {
+        phrasegen::adapt::AdaptConfig {
             prior_count: 0.0,
             min_new_count: 1,
         },
@@ -70,3 +70,4 @@ fn any_timing_model_loads_personalized_and_scores() {
     let ms = any.mean_ms_for("a", "b");
     assert!((ms - 100.0).abs() < 1e-3, "ms={ms}");
 }
+

@@ -1,24 +1,24 @@
 use anyhow::Context as _;
-use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write as _;
+use clap::{Parser, Subcommand, ValueEnum};
 
-use fastphrase::adapt::{adapt_digraph_model, AdaptConfig};
-use fastphrase::generate::{
+use phrasegen::adapt::{adapt_digraph_model, AdaptConfig};
+use phrasegen::generate::{
     estimate_avg_phrase_ms, generate_top, load_wordlist, rng_from_seed, wordlist_from_vec,
     GenerateConfig,
 };
-use fastphrase::import::{bksd, cmu_dsl, cmu_laser2012, greyc_web, keyrecs};
-use fastphrase::kgram::KGramModel;
-use fastphrase::model::{fit_digraph_model, FitConfig};
-use fastphrase::record::{append_row_jsonl, record_once, RecordConfig, RecordOutcome};
-use fastphrase::timing::AnyTimingModel;
-use fastphrase::timing::TimingModel as _;
-use rand::prelude::IndexedRandom as _;
+use phrasegen::import::{bksd, cmu_dsl, cmu_laser2012, greyc_web, keyrecs};
+use phrasegen::kgram::KGramModel;
+use phrasegen::model::{fit_digraph_model, FitConfig};
+use phrasegen::record::{append_row_jsonl, record_once, RecordConfig, RecordOutcome};
+use phrasegen::timing::AnyTimingModel;
+use phrasegen::timing::TimingModel as _;
 use rand::seq::SliceRandom as _;
+use rand::prelude::IndexedRandom as _;
 use rand08::SeedableRng as _;
 
 #[derive(Debug, Parser)]
-#[command(name = "fastphrase")]
+#[command(name = "phrasegen")]
 #[command(about = "Learn typing-timing models and score/generate fast-to-type passphrases")]
 struct Cli {
     #[command(subcommand)]
@@ -28,7 +28,7 @@ struct Cli {
 /// How to rank/select words for a wordset.
 ///
 /// - `ms-only`: optimize *typing speed only* (best when you truly sample uniformly from the final wordset).
-/// - `ms-per-lm-bit`: optimize \(ms / surprisal_bits(word)\) under a character k-gram LM trained on the corpus.
+/// - `ms-per-lm-bit`: optimize `ms / surprisal_bits(word)` under a character k-gram LM trained on the corpus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum WordsetObjective {
     #[value(name = "ms-only")]
@@ -173,13 +173,10 @@ enum Command {
         #[arg(long, default_value_t = true)]
         ascii_lower_only: bool,
     },
-    /// Import a public dataset into `fastphrase` JSONL rows.
+        /// Import a public dataset into `phrasegen` JSONL rows.
     ImportCmuDsl {
         /// CMU DSL-StrongPasswordData.csv URL.
-        #[arg(
-            long,
-            default_value = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv"
-        )]
+        #[arg(long, default_value = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv")]
         url: String,
         /// Output path for JSONL rows.
         #[arg(long)]
@@ -259,7 +256,7 @@ enum Command {
         /// Base model JSON (e.g. union model).
         #[arg(long)]
         base_model: std::path::PathBuf,
-        /// User timing rows (JSONL or CSV in fastphrase format).
+        /// User timing rows (JSONL or CSV in phrasegen format).
         #[arg(long)]
         user_data: std::path::PathBuf,
         /// Output tuned model JSON.
@@ -625,7 +622,7 @@ enum Command {
         /// Base model JSON (e.g. `data/base/model_union.json`).
         #[arg(long)]
         base_model: std::path::PathBuf,
-        /// User timing rows (JSONL or CSV in fastphrase format).
+        /// User timing rows (JSONL or CSV in phrasegen format).
         #[arg(long)]
         user_data: std::path::PathBuf,
         /// Output personalized model JSON.
@@ -863,14 +860,11 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Command::Inspect { input } => {
-            let rows = fastphrase::data::load_rows(&input)
+            let rows = phrasegen::data::load_rows(&input)
                 .with_context(|| format!("loading dataset: {}", input.display()))?;
             println!("rows: {}", rows.len());
             let (min_len, max_len) = rows.iter().fold((usize::MAX, 0usize), |acc, r| {
-                (
-                    acc.0.min(r.phrase.chars().count()),
-                    acc.1.max(r.phrase.chars().count()),
-                )
+                (acc.0.min(r.phrase.chars().count()), acc.1.max(r.phrase.chars().count()))
             });
             if rows.is_empty() {
                 println!("min_chars: 0");
@@ -886,7 +880,7 @@ fn main() -> anyhow::Result<()> {
             output_model,
             clamp_dt_ms,
         } => {
-            let rows = fastphrase::data::load_rows(&input)
+            let rows = phrasegen::data::load_rows(&input)
                 .with_context(|| format!("loading dataset: {}", input.display()))?;
             let (model, stats) = fit_digraph_model(
                 &rows,
@@ -921,18 +915,14 @@ fn main() -> anyhow::Result<()> {
         } => {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let s = fastphrase::score::score_phrase(&model, &phrase);
+            let s = phrasegen::score::score_phrase(&model, &phrase);
             let per_digraph = if s.digraphs == 0 {
                 0.0
             } else {
                 (s.predicted_ms as f64) / (s.digraphs as f64)
             };
             let denom = (s.digraphs as f64) * (model.global_mean_ms() as f64);
-            let norm_ratio = if denom > 0.0 {
-                (s.predicted_ms as f64) / denom
-            } else {
-                0.0
-            };
+            let norm_ratio = if denom > 0.0 { (s.predicted_ms as f64) / denom } else { 0.0 };
             println!("phrase: {phrase}");
             println!("predicted_ms: {:.3}", s.predicted_ms);
             println!("digraphs: {}", s.digraphs);
@@ -940,20 +930,13 @@ fn main() -> anyhow::Result<()> {
             println!("digraph_misses: {}", s.misses);
             println!(
                 "digraph_hit_frac: {:.6}",
-                if s.digraphs == 0 {
-                    0.0
-                } else {
-                    (s.hits as f64) / (s.digraphs as f64)
-                }
+                if s.digraphs == 0 { 0.0 } else { (s.hits as f64) / (s.digraphs as f64) }
             );
             println!("ms_per_digraph: {:.3}", per_digraph);
-            println!(
-                "normalized_vs_global: {:.6} ( <1 faster than avg digraph )",
-                norm_ratio
-            );
+            println!("normalized_vs_global: {:.6} ( <1 faster than avg digraph )", norm_ratio);
 
             if explain_digraphs {
-                let grams = fastphrase::score::graphemes_normalized(&phrase);
+                let grams = phrasegen::score::graphemes_normalized(&phrase);
                 println!();
                 println!("digraph_breakdown (normalized graphemes):");
                 if grams.len() < 2 {
@@ -1015,9 +998,7 @@ fn main() -> anyhow::Result<()> {
                     // Sample a phrase.
                     let mut parts: Vec<&str> = Vec::with_capacity(ref_words);
                     for _ in 0..ref_words {
-                        let Some(w) = wl.words.choose(&mut rng) else {
-                            break;
-                        };
+                        let Some(w) = wl.words.choose(&mut rng) else { break };
                         parts.push(w.as_str());
                     }
                     if parts.len() != ref_words {
@@ -1027,8 +1008,7 @@ fn main() -> anyhow::Result<()> {
                     for (i, w) in parts.iter().enumerate() {
                         if i > 0 {
                             if let Some(dist) = &gap_dist {
-                                let gap: String =
-                                    rand08::distributions::Distribution::sample(dist, &mut rng_gap);
+                                let gap: String = rand08::distributions::Distribution::sample(dist, &mut rng_gap);
                                 p.push_str(&gap);
                             } else {
                                 p.push(' ');
@@ -1041,7 +1021,7 @@ fn main() -> anyhow::Result<()> {
                             continue;
                         }
                     }
-                    let ms = fastphrase::score::score_phrase(&model, &p).predicted_ms as f64;
+                    let ms = phrasegen::score::score_phrase(&model, &p).predicted_ms as f64;
                     sum += ms;
                     sum_sq += ms * ms;
                     vals.push(ms);
@@ -1053,11 +1033,7 @@ fn main() -> anyhow::Result<()> {
                     let mean = sum / (kept as f64);
                     let var = (sum_sq / (kept as f64)) - mean * mean;
                     let std = var.max(0.0).sqrt();
-                    let z = if std > 0.0 {
-                        ((s.predicted_ms as f64) - mean) / std
-                    } else {
-                        0.0
-                    };
+                    let z = if std > 0.0 { ((s.predicted_ms as f64) - mean) / std } else { 0.0 };
                     // Empirical percentile (lower is faster).
                     let phrase_ms = s.predicted_ms as f64;
                     let le = vals.partition_point(|x| *x <= phrase_ms);
@@ -1082,10 +1058,7 @@ fn main() -> anyhow::Result<()> {
                         "calibration.quantiles_ms(p10/p50/p90/p95/p99): {:.3}/{:.3}/{:.3}/{:.3}/{:.3}",
                         q10, q50, q90, q95, q99
                     );
-                    println!(
-                        "calibration.percentile_empirical: {:.6} (lower is faster)",
-                        pct_emp
-                    );
+                    println!("calibration.percentile_empirical: {:.6} (lower is faster)", pct_emp);
                     println!(
                         "calibration.faster_than_frac: {:.6}",
                         (1.0 - pct_emp).max(0.0)
@@ -1126,10 +1099,7 @@ fn main() -> anyhow::Result<()> {
             let (best, gen_stats) = generate_top(&model, &wl, &gcfg, &mut rng);
 
             println!("model.global_mean_ms: {:.3}", model.global_mean_ms());
-            println!(
-                "wordlist.total_words_in_file: {}",
-                gen_stats.total_words_in_file
-            );
+            println!("wordlist.total_words_in_file: {}", gen_stats.total_words_in_file);
             println!("wordlist.usable_words: {}", gen_stats.usable_words);
             println!(
                 "entropy_bits_approx: {:.2} (assuming uniform sampling, words={}, sep={:?})",
@@ -1148,8 +1118,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         Command::ImportCmuDsl { url, output } => {
-            let bytes =
-                cmu_dsl::download_csv(&url).with_context(|| format!("downloading: {url}"))?;
+            let bytes = cmu_dsl::download_csv(&url).with_context(|| format!("downloading: {url}"))?;
             let rows = cmu_dsl::parse_csv_bytes(&bytes).context("parsing CMU DSL CSV")?;
             cmu_dsl::write_jsonl(&rows, &output)
                 .with_context(|| format!("writing jsonl: {}", output.display()))?;
@@ -1193,7 +1162,7 @@ fn main() -> anyhow::Result<()> {
             if cmu_dsl {
                 let p = out_dir.join("cmu").join("DSL-StrongPasswordData.csv");
                 let url = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv";
-                fastphrase::import::download_to_file(url, &p)
+                phrasegen::import::download_to_file(url, &p)
                     .with_context(|| format!("downloading CMU DSL CSV: {url}"))?;
                 println!("downloaded: {}", p.display());
             }
@@ -1209,7 +1178,7 @@ fn main() -> anyhow::Result<()> {
                 ] {
                     let url = format!("{base}/{name}");
                     let p = out_dir.join("bksd").join(name);
-                    fastphrase::import::download_to_file(&url, &p)
+                    phrasegen::import::download_to_file(&url, &p)
                         .with_context(|| format!("downloading BKSD file: {url}"))?;
                     println!("downloaded: {}", p.display());
                 }
@@ -1218,17 +1187,15 @@ fn main() -> anyhow::Result<()> {
             if greyc_web {
                 let p = out_dir.join("greyc_web").join("webkeystroke.tar.gz");
                 let url = greyc_web::default_url();
-                fastphrase::import::download_to_file(url, &p)
+                phrasegen::import::download_to_file(url, &p)
                     .with_context(|| format!("downloading GREYC web dataset: {url}"))?;
                 println!("downloaded: {}", p.display());
             }
 
             if cmu_laser2012 {
-                let p = out_dir
-                    .join("cmu_laser2012")
-                    .join("DSL-Free-vs-Transcribed.zip");
+                let p = out_dir.join("cmu_laser2012").join("DSL-Free-vs-Transcribed.zip");
                 let url = cmu_laser2012::default_url();
-                fastphrase::import::download_to_file(url, &p)
+                phrasegen::import::download_to_file(url, &p)
                     .with_context(|| format!("downloading CMU LASER-2012 zip: {url}"))?;
                 println!("downloaded: {}", p.display());
             }
@@ -1236,13 +1203,13 @@ fn main() -> anyhow::Result<()> {
             if keyrecs {
                 let p1 = out_dir.join("keyrecs").join("free-text.csv");
                 let url1 = keyrecs::free_text_url();
-                fastphrase::import::download_to_file(url1, &p1)
+                phrasegen::import::download_to_file(url1, &p1)
                     .with_context(|| format!("downloading KeyRecs free-text: {url1}"))?;
                 println!("downloaded: {}", p1.display());
 
                 let p2 = out_dir.join("keyrecs").join("fixed-text.csv");
                 let url2 = keyrecs::fixed_text_url();
-                fastphrase::import::download_to_file(url2, &p2)
+                phrasegen::import::download_to_file(url2, &p2)
                     .with_context(|| format!("downloading KeyRecs fixed-text: {url2}"))?;
                 println!("downloaded: {}", p2.display());
             }
@@ -1251,7 +1218,7 @@ fn main() -> anyhow::Result<()> {
             match corpus.as_str() {
                 "dwyl_words_alpha" => {
                     let url = "https://raw.githubusercontent.com/dwyl/english-words/20f5cc9b3f0ccc8ce45d814c532b7c2031bba31c/words_alpha.txt";
-                    fastphrase::import::download_to_file(url, &output)
+                    phrasegen::import::download_to_file(url, &output)
                         .with_context(|| format!("downloading corpus from {url}"))?;
                     println!("downloaded: {}", output.display());
                     println!("corpus: {corpus}");
@@ -1259,7 +1226,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 "pdwl_5000_more_common" => {
                     let url = "https://raw.githubusercontent.com/MichaelWehar/Public-Domain-Word-Lists/e2fe9d32eeb86179b464aba0e91fa96904b8e7e8/5000-more-common.txt";
-                    fastphrase::import::download_to_file(url, &output)
+                    phrasegen::import::download_to_file(url, &output)
                         .with_context(|| format!("downloading corpus from {url}"))?;
                     println!("downloaded: {}", output.display());
                     println!("corpus: {corpus}");
@@ -1269,7 +1236,7 @@ fn main() -> anyhow::Result<()> {
                     // JSON list of [word, ln(freq)] where freq is a fraction.
                     let url = "https://raw.githubusercontent.com/aparrish/wordfreq-en-25000/master/wordfreq-en-25000-log.json";
                     let tmp = std::env::temp_dir().join("fastphrase_wordfreq_en_25k.json");
-                    fastphrase::import::download_to_file(url, &tmp)
+                    phrasegen::import::download_to_file(url, &tmp)
                         .with_context(|| format!("downloading corpus json from {url}"))?;
                     let bytes = std::fs::read(&tmp)?;
                     let rows: Vec<(String, f64)> = serde_json::from_slice(&bytes)
@@ -1308,14 +1275,13 @@ fn main() -> anyhow::Result<()> {
                     let url_dwyl = "https://raw.githubusercontent.com/dwyl/english-words/20f5cc9b3f0ccc8ce45d814c532b7c2031bba31c/words_alpha.txt";
                     let tmp1 = std::env::temp_dir().join("fastphrase_wordfreq_en_25k.json");
                     let tmp2 = std::env::temp_dir().join("fastphrase_dwyl_words_alpha.txt");
-                    fastphrase::import::download_to_file(url_wordfreq, &tmp1)?;
-                    fastphrase::import::download_to_file(url_dwyl, &tmp2)?;
+                    phrasegen::import::download_to_file(url_wordfreq, &tmp1)?;
+                    phrasegen::import::download_to_file(url_dwyl, &tmp2)?;
 
                     let bytes = std::fs::read(&tmp1)?;
                     let rows: Vec<(String, f64)> = serde_json::from_slice(&bytes)
                         .context("parsing wordfreq-en-25000-log.json")?;
-                    let mut map: std::collections::HashMap<String, u64> =
-                        std::collections::HashMap::new();
+                    let mut map: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
                     let scale = 1e9_f64;
                     for (w, ln_freq) in rows {
                         let freq = ln_freq.exp();
@@ -1365,14 +1331,13 @@ fn main() -> anyhow::Result<()> {
                     let url_eff = "https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt";
                     let tmp1 = std::env::temp_dir().join("fastphrase_wordfreq_en_25k.json");
                     let tmp2 = std::env::temp_dir().join("fastphrase_eff_large_wordlist.txt");
-                    fastphrase::import::download_to_file(url_wordfreq, &tmp1)?;
-                    fastphrase::import::download_to_file(url_eff, &tmp2)?;
+                    phrasegen::import::download_to_file(url_wordfreq, &tmp1)?;
+                    phrasegen::import::download_to_file(url_eff, &tmp2)?;
 
                     let bytes = std::fs::read(&tmp1)?;
                     let rows: Vec<(String, f64)> = serde_json::from_slice(&bytes)
                         .context("parsing wordfreq-en-25000-log.json")?;
-                    let mut map: std::collections::HashMap<String, u64> =
-                        std::collections::HashMap::new();
+                    let mut map: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
                     let scale = 1e9_f64;
                     for (w, ln_freq) in rows {
                         let freq = ln_freq.exp();
@@ -1432,9 +1397,7 @@ fn main() -> anyhow::Result<()> {
             let cmu_path = datasets_dir.join("cmu").join("DSL-StrongPasswordData.csv");
             let bksd_dir = datasets_dir.join("bksd");
             let greyc_path = datasets_dir.join("greyc_web").join("webkeystroke.tar.gz");
-            let laser_path = datasets_dir
-                .join("cmu_laser2012")
-                .join("DSL-Free-vs-Transcribed.zip");
+            let laser_path = datasets_dir.join("cmu_laser2012").join("DSL-Free-vs-Transcribed.zip");
             let keyrecs_free = datasets_dir.join("keyrecs").join("free-text.csv");
             let bksd_zips = [
                 ("bksd_password_ar", "Password-Arabic.zip"),
@@ -1447,7 +1410,7 @@ fn main() -> anyhow::Result<()> {
                 std::fs::create_dir_all(&datasets_dir)?;
                 if !cmu_path.exists() {
                     let url = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv";
-                    fastphrase::import::download_to_file(url, &cmu_path)
+                    phrasegen::import::download_to_file(url, &cmu_path)
                         .with_context(|| format!("downloading CMU DSL CSV: {url}"))?;
                 }
                 for (_tag, name) in bksd_zips {
@@ -1455,23 +1418,23 @@ fn main() -> anyhow::Result<()> {
                     if !p.exists() {
                         let base = "https://raw.githubusercontent.com/ntwaijry/BKSD/eb0b5907a090a9ba06d47f98cd63cf1c7f0e3339/dataset";
                         let url = format!("{base}/{name}");
-                        fastphrase::import::download_to_file(&url, &p)
+                        phrasegen::import::download_to_file(&url, &p)
                             .with_context(|| format!("downloading BKSD file: {url}"))?;
                     }
                 }
                 if !greyc_path.exists() {
                     let url = greyc_web::default_url();
-                    fastphrase::import::download_to_file(url, &greyc_path)
+                    phrasegen::import::download_to_file(url, &greyc_path)
                         .with_context(|| format!("downloading GREYC web dataset: {url}"))?;
                 }
                 if !laser_path.exists() {
                     let url = cmu_laser2012::default_url();
-                    fastphrase::import::download_to_file(url, &laser_path)
+                    phrasegen::import::download_to_file(url, &laser_path)
                         .with_context(|| format!("downloading CMU LASER-2012 zip: {url}"))?;
                 }
                 if !keyrecs_free.exists() {
                     let url = keyrecs::free_text_url();
-                    fastphrase::import::download_to_file(url, &keyrecs_free)
+                    phrasegen::import::download_to_file(url, &keyrecs_free)
                         .with_context(|| format!("downloading KeyRecs free-text: {url}"))?;
                 }
             }
@@ -1483,8 +1446,7 @@ fn main() -> anyhow::Result<()> {
             let mut f = std::io::BufWriter::new(std::fs::File::create(&output)?);
 
             let mut total = 0usize;
-            let mut per_source: std::collections::HashMap<String, usize> =
-                std::collections::HashMap::new();
+            let mut per_source: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
             // CMU (character-labeled digraphs for a fixed password).
             if cmu_path.exists() {
@@ -1495,9 +1457,7 @@ fn main() -> anyhow::Result<()> {
                     serde_json::to_writer(&mut f, &row)?;
                     f.write_all(b"\n")?;
                     total += 1;
-                    *per_source
-                        .entry(row.source.clone().unwrap_or_else(|| "unknown".to_string()))
-                        .or_insert(0) += 1;
+                    *per_source.entry(row.source.clone().unwrap_or_else(|| "unknown".to_string())).or_insert(0) += 1;
                 }
             }
 
@@ -1507,17 +1467,13 @@ fn main() -> anyhow::Result<()> {
                 if !p.exists() {
                     continue;
                 }
-                let bytes = std::fs::read(&p)
-                    .with_context(|| format!("reading BKSD zip: {}", p.display()))?;
-                let rows = bksd::parse_zip_bytes(&bytes, tag)
-                    .with_context(|| format!("parsing BKSD zip: {}", p.display()))?;
+                let bytes = std::fs::read(&p).with_context(|| format!("reading BKSD zip: {}", p.display()))?;
+                let rows = bksd::parse_zip_bytes(&bytes, tag).with_context(|| format!("parsing BKSD zip: {}", p.display()))?;
                 for row in rows {
                     serde_json::to_writer(&mut f, &row)?;
                     f.write_all(b"\n")?;
                     total += 1;
-                    *per_source
-                        .entry(row.source.clone().unwrap_or_else(|| "unknown".to_string()))
-                        .or_insert(0) += 1;
+                    *per_source.entry(row.source.clone().unwrap_or_else(|| "unknown".to_string())).or_insert(0) += 1;
                 }
             }
 
@@ -1534,17 +1490,13 @@ fn main() -> anyhow::Result<()> {
                         max_rows: None,
                     },
                 )
-                .with_context(|| {
-                    format!("importing GREYC web dataset: {}", greyc_path.display())
-                })?;
-                let imported = fastphrase::data::load_rows(&tmp)?;
+                .with_context(|| format!("importing GREYC web dataset: {}", greyc_path.display()))?;
+                let imported = phrasegen::data::load_rows(&tmp)?;
                 for row in imported {
                     serde_json::to_writer(&mut f, &row)?;
                     f.write_all(b"\n")?;
                     total += 1;
-                    *per_source
-                        .entry(row.source.clone().unwrap_or_else(|| "unknown".to_string()))
-                        .or_insert(0) += 1;
+                    *per_source.entry(row.source.clone().unwrap_or_else(|| "unknown".to_string())).or_insert(0) += 1;
                 }
                 println!("greyc_web_rows_appended: {wrote}");
                 // Best-effort cleanup.
@@ -1569,12 +1521,10 @@ fn main() -> anyhow::Result<()> {
 
             // KeyRecs free-text digraph features (CC-BY 4.0).
             if keyrecs_free.exists() {
-                let bytes = std::fs::read(&keyrecs_free).with_context(|| {
-                    format!("reading KeyRecs free-text: {}", keyrecs_free.display())
-                })?;
-                let rows = keyrecs::parse_free_text_csv_bytes(&bytes).with_context(|| {
-                    format!("parsing KeyRecs free-text: {}", keyrecs_free.display())
-                })?;
+                let bytes = std::fs::read(&keyrecs_free)
+                    .with_context(|| format!("reading KeyRecs free-text: {}", keyrecs_free.display()))?;
+                let rows = keyrecs::parse_free_text_csv_bytes(&bytes)
+                    .with_context(|| format!("parsing KeyRecs free-text: {}", keyrecs_free.display()))?;
                 for row in rows {
                     serde_json::to_writer(&mut f, &row)?;
                     f.write_all(b"\n")?;
@@ -1601,9 +1551,9 @@ fn main() -> anyhow::Result<()> {
             prior_count,
             min_new_count,
         } => {
-            let base = fastphrase::model::DigraphModel::load_json(&base_model)
+            let base = phrasegen::model::DigraphModel::load_json(&base_model)
                 .with_context(|| format!("loading base model: {}", base_model.display()))?;
-            let user_rows = fastphrase::data::load_rows(&user_data)
+            let user_rows = phrasegen::data::load_rows(&user_data)
                 .with_context(|| format!("loading user data: {}", user_data.display()))?;
             let (tuned, stats) = adapt_digraph_model(
                 &base,
@@ -1665,11 +1615,10 @@ fn main() -> anyhow::Result<()> {
             println!("output: {}", output.display());
 
             if let (Some(base_model), Some(output_model)) = (base_model, output_model) {
-                let base = fastphrase::model::DigraphModel::load_json(&base_model)
+                let base = phrasegen::model::DigraphModel::load_json(&base_model)
                     .with_context(|| format!("loading base model: {}", base_model.display()))?;
-                let user_rows = fastphrase::data::load_rows(&output).with_context(|| {
-                    format!("loading accumulated user data: {}", output.display())
-                })?;
+                let user_rows = phrasegen::data::load_rows(&output)
+                    .with_context(|| format!("loading accumulated user data: {}", output.display()))?;
                 let (tuned, stats) = adapt_digraph_model(
                     &base,
                     &user_rows,
@@ -1709,9 +1658,8 @@ fn main() -> anyhow::Result<()> {
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
 
             let mut rng = rng_from_seed(seed);
-            let (mean_ms, std_ms) = fastphrase::generate::estimate_avg_phrase_ms(
-                &model, &wl, &gcfg, samples, &mut rng,
-            )?;
+            let (mean_ms, std_ms) =
+                phrasegen::generate::estimate_avg_phrase_ms(&model, &wl, &gcfg, samples, &mut rng)?;
 
             let m = wl.words.len() as f64;
             let n = words as u64;
@@ -1761,8 +1709,13 @@ fn main() -> anyhow::Result<()> {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
 
-            let counts = load_corpus_counts(&corpus, ascii_lower_only, min_word_len, max_word_len)
-                .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
+            let counts = load_corpus_counts(
+                &corpus,
+                ascii_lower_only,
+                min_word_len,
+                max_word_len,
+            )
+            .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
 
             let mut km = KGramModel::new(k, alpha)?;
             if objective == WordsetObjective::MsPerLmBit {
@@ -1780,7 +1733,7 @@ fn main() -> anyhow::Result<()> {
 
             let mut rows = Vec::new();
             for w in counts.keys() {
-                let ms = fastphrase::score::score_phrase(&model, w).predicted_ms as f64;
+                let ms = phrasegen::score::score_phrase(&model, w).predicted_ms as f64;
                 let bits = if objective == WordsetObjective::MsPerLmBit {
                     km.surprisal_bits(w)
                 } else {
@@ -1798,9 +1751,7 @@ fn main() -> anyhow::Result<()> {
 
             match objective {
                 WordsetObjective::MsOnly => rows.sort_by(|a, b| a.ms.total_cmp(&b.ms)),
-                WordsetObjective::MsPerLmBit => {
-                    rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit))
-                }
+                WordsetObjective::MsPerLmBit => rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit)),
             }
 
             println!("objective: {:?}", objective);
@@ -1843,8 +1794,13 @@ fn main() -> anyhow::Result<()> {
         } => {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let counts = load_corpus_counts(&corpus, ascii_lower_only, min_word_len, max_word_len)
-                .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
+            let counts = load_corpus_counts(
+                &corpus,
+                ascii_lower_only,
+                min_word_len,
+                max_word_len,
+            )
+            .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
 
             let mut km = KGramModel::new(k, alpha)?;
             if objective == WordsetObjective::MsPerLmBit {
@@ -1866,7 +1822,7 @@ fn main() -> anyhow::Result<()> {
                     skipped_low_vowels += 1;
                     continue;
                 }
-                let sc = fastphrase::score::score_phrase(&model, w);
+                let sc = phrasegen::score::score_phrase(&model, w);
                 if sc.digraphs == 0 {
                     continue;
                 }
@@ -1891,9 +1847,7 @@ fn main() -> anyhow::Result<()> {
             }
             match objective {
                 WordsetObjective::MsOnly => rows.sort_by(|a, b| a.ms.total_cmp(&b.ms)),
-                WordsetObjective::MsPerLmBit => {
-                    rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit))
-                }
+                WordsetObjective::MsPerLmBit => rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit)),
             }
 
             if let Some(parent) = output.parent() {
@@ -1903,11 +1857,7 @@ fn main() -> anyhow::Result<()> {
             if tsv {
                 writeln!(f, "word\tms\tbits\tms_per_bit")?;
                 for r in rows.into_iter().take(top) {
-                    writeln!(
-                        f,
-                        "{}\t{:.6}\t{:.6}\t{:.6}",
-                        r.word, r.ms, r.bits, r.ms_per_bit
-                    )?;
+                    writeln!(f, "{}\t{:.6}\t{:.6}\t{:.6}", r.word, r.ms, r.bits, r.ms_per_bit)?;
                 }
             } else {
                 for r in rows.into_iter().take(top) {
@@ -1959,8 +1909,13 @@ fn main() -> anyhow::Result<()> {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
 
-            let counts = load_corpus_counts(&corpus, ascii_lower_only, min_word_len, max_word_len)
-                .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
+            let counts = load_corpus_counts(
+                &corpus,
+                ascii_lower_only,
+                min_word_len,
+                max_word_len,
+            )
+            .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
 
             // Optional heuristic: a character k-gram “LM surprisal” for words.
             let mut km = KGramModel::new(k, alpha)?;
@@ -1983,7 +1938,7 @@ fn main() -> anyhow::Result<()> {
                     skipped_low_vowels += 1;
                     continue;
                 }
-                let sc = fastphrase::score::score_phrase(&model, w);
+                let sc = phrasegen::score::score_phrase(&model, w);
                 if sc.digraphs == 0 {
                     continue;
                 }
@@ -1995,11 +1950,7 @@ fn main() -> anyhow::Result<()> {
                 let ms = sc.predicted_ms as f64;
                 let ms_per_bit = if objective == WordsetObjective::MsPerLmBit {
                     let bits = km.surprisal_bits(w);
-                    if bits > 0.0 {
-                        ms / bits
-                    } else {
-                        f64::INFINITY
-                    }
+                    if bits > 0.0 { ms / bits } else { f64::INFINITY }
                 } else {
                     // Not used for sorting in ms-only mode.
                     f64::INFINITY
@@ -2017,9 +1968,7 @@ fn main() -> anyhow::Result<()> {
             }
             match objective {
                 WordsetObjective::MsOnly => rows.sort_by(|a, b| a.ms.total_cmp(&b.ms)),
-                WordsetObjective::MsPerLmBit => {
-                    rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit))
-                }
+                WordsetObjective::MsPerLmBit => rows.sort_by(|a, b| a.ms_per_bit.total_cmp(&b.ms_per_bit)),
             }
 
             // Minimum N needed for target entropy (uniform assumption).
@@ -2086,7 +2035,9 @@ fn main() -> anyhow::Result<()> {
             println!("achieved_entropy_bits: {:.3}", bits);
             if bits + 1e-9 < target_bits {
                 println!("warning: target_bits_not_achievable_with_current_corpus_size");
-                println!("hint: increase --words, relax filters, or use a larger corpus");
+                println!(
+                    "hint: increase --words, relax filters, or use a larger corpus"
+                );
             }
             println!("avg_ms_per_phrase: {:.3}", mean_ms);
             println!("std_ms_per_phrase: {:.3}", std_ms);
@@ -2125,111 +2076,105 @@ fn main() -> anyhow::Result<()> {
             {
                 if reuse_existing && union_jsonl.exists() {
                     if debug {
-                        println!(
-                            "base-pipeline: reusing union_jsonl: {}",
-                            union_jsonl.display()
-                        );
+                        println!("base-pipeline: reusing union_jsonl: {}", union_jsonl.display());
                     }
                 } else {
                     if debug {
-                        println!(
-                            "base-pipeline: building union_jsonl: {}",
-                            union_jsonl.display()
-                        );
+                        println!("base-pipeline: building union_jsonl: {}", union_jsonl.display());
                     }
                     let t0 = std::time::Instant::now();
-                    // reuse logic: just call UnionDatasets path directly by duplicating minimal code
-                    let cmu_path = datasets_dir.join("cmu").join("DSL-StrongPasswordData.csv");
-                    let bksd_dir = datasets_dir.join("bksd");
-                    let greyc_path = datasets_dir.join("greyc_web").join("webkeystroke.tar.gz");
-                    let laser_path = datasets_dir
-                        .join("cmu_laser2012")
-                        .join("DSL-Free-vs-Transcribed.zip");
-                    let keyrecs_free = datasets_dir.join("keyrecs").join("free-text.csv");
-                    let bksd_zips = [
-                        ("bksd_password_ar", "Password-Arabic.zip"),
-                        ("bksd_password_en", "Password-English.zip"),
-                        ("bksd_phrase_ar", "Phrase-Arabic.zip"),
-                        ("bksd_phrase_en", "Phrase-English.zip"),
-                    ];
-                    std::fs::create_dir_all(&datasets_dir)?;
-                    if !cmu_path.exists() {
-                        let url = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv";
-                        fastphrase::import::download_to_file(url, &cmu_path)?;
+                // reuse logic: just call UnionDatasets path directly by duplicating minimal code
+                let cmu_path = datasets_dir.join("cmu").join("DSL-StrongPasswordData.csv");
+                let bksd_dir = datasets_dir.join("bksd");
+                let greyc_path = datasets_dir.join("greyc_web").join("webkeystroke.tar.gz");
+                let laser_path = datasets_dir.join("cmu_laser2012").join("DSL-Free-vs-Transcribed.zip");
+                let keyrecs_free = datasets_dir.join("keyrecs").join("free-text.csv");
+                let bksd_zips = [
+                    ("bksd_password_ar", "Password-Arabic.zip"),
+                    ("bksd_password_en", "Password-English.zip"),
+                    ("bksd_phrase_ar", "Phrase-Arabic.zip"),
+                    ("bksd_phrase_en", "Phrase-English.zip"),
+                ];
+                std::fs::create_dir_all(&datasets_dir)?;
+                if !cmu_path.exists() {
+                    let url = "https://www.cs.cmu.edu/~keystroke/DSL-StrongPasswordData.csv";
+                    phrasegen::import::download_to_file(url, &cmu_path)?;
+                }
+                for (_tag, name) in bksd_zips {
+                    let p = bksd_dir.join(name);
+                    if !p.exists() {
+                        let base = "https://raw.githubusercontent.com/ntwaijry/BKSD/eb0b5907a090a9ba06d47f98cd63cf1c7f0e3339/dataset";
+                        let url = format!("{base}/{name}");
+                        phrasegen::import::download_to_file(&url, &p)?;
                     }
-                    for (_tag, name) in bksd_zips {
-                        let p = bksd_dir.join(name);
-                        if !p.exists() {
-                            let base = "https://raw.githubusercontent.com/ntwaijry/BKSD/eb0b5907a090a9ba06d47f98cd63cf1c7f0e3339/dataset";
-                            let url = format!("{base}/{name}");
-                            fastphrase::import::download_to_file(&url, &p)?;
-                        }
-                    }
-                    if !greyc_path.exists() {
-                        let url = greyc_web::default_url();
-                        fastphrase::import::download_to_file(url, &greyc_path)?;
-                    }
-                    if !laser_path.exists() {
-                        let url = cmu_laser2012::default_url();
-                        fastphrase::import::download_to_file(url, &laser_path)?;
-                    }
-                    if !keyrecs_free.exists() {
-                        let url = keyrecs::free_text_url();
-                        fastphrase::import::download_to_file(url, &keyrecs_free)?;
-                    }
-                    let mut f = std::io::BufWriter::new(std::fs::File::create(&union_jsonl)?);
-                    let bytes = std::fs::read(&cmu_path)?;
-                    let rows = cmu_dsl::parse_csv_bytes(&bytes)?;
+                }
+                if !greyc_path.exists() {
+                    let url = greyc_web::default_url();
+                    phrasegen::import::download_to_file(url, &greyc_path)?;
+                }
+                if !laser_path.exists() {
+                    let url = cmu_laser2012::default_url();
+                    phrasegen::import::download_to_file(url, &laser_path)?;
+                }
+                if !keyrecs_free.exists() {
+                    let url = keyrecs::free_text_url();
+                    phrasegen::import::download_to_file(url, &keyrecs_free)?;
+                }
+                let mut f = std::io::BufWriter::new(std::fs::File::create(&union_jsonl)?);
+                let bytes = std::fs::read(&cmu_path)?;
+                let rows = cmu_dsl::parse_csv_bytes(&bytes)?;
+                for row in rows {
+                    serde_json::to_writer(&mut f, &row)?;
+                    f.write_all(b"\n")?;
+                }
+                for (tag, name) in bksd_zips {
+                    let p = bksd_dir.join(name);
+                    let bytes = std::fs::read(&p)?;
+                    let rows = bksd::parse_zip_bytes(&bytes, tag)?;
                     for row in rows {
                         serde_json::to_writer(&mut f, &row)?;
                         f.write_all(b"\n")?;
                     }
-                    for (tag, name) in bksd_zips {
-                        let p = bksd_dir.join(name);
-                        let bytes = std::fs::read(&p)?;
-                        let rows = bksd::parse_zip_bytes(&bytes, tag)?;
-                        for row in rows {
-                            serde_json::to_writer(&mut f, &row)?;
-                            f.write_all(b"\n")?;
-                        }
+                }
+                // GREYC webkeystroke
+                if greyc_path.exists() {
+                    let tmp = std::env::temp_dir().join("fastphrase_greyc_web_basepipeline.jsonl");
+                    let _wrote = greyc_web::write_jsonl_from_tar_gz_path(
+                        &greyc_path,
+                        &tmp,
+                        greyc_web::ImportConfig::default(),
+                    )?;
+                    let imported = phrasegen::data::load_rows(&tmp)?;
+                    for row in imported {
+                        serde_json::to_writer(&mut f, &row)?;
+                        f.write_all(b"\n")?;
                     }
-                    // GREYC webkeystroke
-                    if greyc_path.exists() {
-                        let tmp =
-                            std::env::temp_dir().join("fastphrase_greyc_web_basepipeline.jsonl");
-                        let _wrote = greyc_web::write_jsonl_from_tar_gz_path(
-                            &greyc_path,
-                            &tmp,
-                            greyc_web::ImportConfig::default(),
-                        )?;
-                        let imported = fastphrase::data::load_rows(&tmp)?;
-                        for row in imported {
-                            serde_json::to_writer(&mut f, &row)?;
-                            f.write_all(b"\n")?;
-                        }
-                        let _ = std::fs::remove_file(&tmp);
+                    let _ = std::fs::remove_file(&tmp);
+                }
+                // LASER-2012
+                if laser_path.exists() {
+                    let bytes = std::fs::read(&laser_path)?;
+                    let rows = cmu_laser2012::parse_zip_bytes(&bytes)?;
+                    for row in rows {
+                        serde_json::to_writer(&mut f, &row)?;
+                        f.write_all(b"\n")?;
                     }
-                    // LASER-2012
-                    if laser_path.exists() {
-                        let bytes = std::fs::read(&laser_path)?;
-                        let rows = cmu_laser2012::parse_zip_bytes(&bytes)?;
-                        for row in rows {
-                            serde_json::to_writer(&mut f, &row)?;
-                            f.write_all(b"\n")?;
-                        }
+                }
+                // KeyRecs free-text
+                if keyrecs_free.exists() {
+                    let bytes = std::fs::read(&keyrecs_free)?;
+                    let rows = keyrecs::parse_free_text_csv_bytes(&bytes)?;
+                    for row in rows {
+                        serde_json::to_writer(&mut f, &row)?;
+                        f.write_all(b"\n")?;
                     }
-                    // KeyRecs free-text
-                    if keyrecs_free.exists() {
-                        let bytes = std::fs::read(&keyrecs_free)?;
-                        let rows = keyrecs::parse_free_text_csv_bytes(&bytes)?;
-                        for row in rows {
-                            serde_json::to_writer(&mut f, &row)?;
-                            f.write_all(b"\n")?;
-                        }
-                    }
-                    f.flush()?;
+                }
+                f.flush()?;
                     if debug {
-                        println!("base-pipeline: union_jsonl done in {:.2?}", t0.elapsed());
+                        println!(
+                            "base-pipeline: union_jsonl done in {:.2?}",
+                            t0.elapsed()
+                        );
                     }
                 }
             }
@@ -2245,7 +2190,7 @@ fn main() -> anyhow::Result<()> {
                         println!("base-pipeline: fitting model: {}", model_json.display());
                     }
                     let t0 = std::time::Instant::now();
-                    let rows = fastphrase::data::load_rows(&union_jsonl)?;
+                    let rows = phrasegen::data::load_rows(&union_jsonl)?;
                     if debug {
                         println!("base-pipeline: loaded rows: {}", rows.len());
                     }
@@ -2275,48 +2220,46 @@ fn main() -> anyhow::Result<()> {
                         println!("base-pipeline: building corpus: {}", corpus_path.display());
                     }
                     let t0 = std::time::Instant::now();
-                    // Inline the `hybrid_wordfreq25k_plus_dwyl` logic.
-                    let url_wordfreq = "https://raw.githubusercontent.com/aparrish/wordfreq-en-25000/master/wordfreq-en-25000-log.json";
-                    let url_dwyl = "https://raw.githubusercontent.com/dwyl/english-words/20f5cc9b3f0ccc8ce45d814c532b7c2031bba31c/words_alpha.txt";
-                    let tmp1 =
-                        std::env::temp_dir().join("fastphrase_wordfreq_en_25k_basepipeline.json");
-                    let tmp2 = std::env::temp_dir().join("fastphrase_words_alpha_basepipeline.txt");
-                    fastphrase::import::download_to_file(url_wordfreq, &tmp1)?;
-                    fastphrase::import::download_to_file(url_dwyl, &tmp2)?;
+                // Inline the `hybrid_wordfreq25k_plus_dwyl` logic.
+                let url_wordfreq = "https://raw.githubusercontent.com/aparrish/wordfreq-en-25000/master/wordfreq-en-25000-log.json";
+                let url_dwyl = "https://raw.githubusercontent.com/dwyl/english-words/20f5cc9b3f0ccc8ce45d814c532b7c2031bba31c/words_alpha.txt";
+                let tmp1 = std::env::temp_dir().join("fastphrase_wordfreq_en_25k_basepipeline.json");
+                let tmp2 = std::env::temp_dir().join("fastphrase_words_alpha_basepipeline.txt");
+                phrasegen::import::download_to_file(url_wordfreq, &tmp1)?;
+                phrasegen::import::download_to_file(url_dwyl, &tmp2)?;
 
-                    let bytes = std::fs::read(&tmp1)?;
-                    let rows: Vec<(String, f64)> = serde_json::from_slice(&bytes)?;
-                    let mut map: std::collections::HashMap<String, u64> =
-                        std::collections::HashMap::new();
-                    let scale = 1e9_f64;
-                    for (w, ln_freq) in rows {
-                        let freq = ln_freq.exp();
-                        if !freq.is_finite() || freq <= 0.0 {
-                            continue;
-                        }
-                        let count = (freq * scale).round().max(1.0) as u64;
-                        map.insert(w, count);
+                let bytes = std::fs::read(&tmp1)?;
+                let rows: Vec<(String, f64)> = serde_json::from_slice(&bytes)?;
+                let mut map: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+                let scale = 1e9_f64;
+                for (w, ln_freq) in rows {
+                    let freq = ln_freq.exp();
+                    if !freq.is_finite() || freq <= 0.0 {
+                        continue;
                     }
-                    let dwyl = std::fs::read_to_string(&tmp2)?;
-                    for line in dwyl.lines() {
-                        let w = line.trim();
-                        if w.is_empty() || w.starts_with('#') {
-                            continue;
-                        }
-                        map.entry(w.to_string()).or_insert(1);
+                    let count = (freq * scale).round().max(1.0) as u64;
+                    map.insert(w, count);
+                }
+                let dwyl = std::fs::read_to_string(&tmp2)?;
+                for line in dwyl.lines() {
+                    let w = line.trim();
+                    if w.is_empty() || w.starts_with('#') {
+                        continue;
                     }
-                    let mut items: Vec<(String, u64)> = map.into_iter().collect();
-                    items.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                    map.entry(w.to_string()).or_insert(1);
+                }
+                let mut items: Vec<(String, u64)> = map.into_iter().collect();
+                items.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-                    let mut f = std::io::BufWriter::new(std::fs::File::create(&corpus_path)?);
-                    writeln!(f, "# hybrid: aparrish/wordfreq-en-25000 (scaled counts) + dwyl/words_alpha tail (count=1)")?;
-                    for (w, c) in items {
-                        writeln!(f, "{w}\t{c}")?;
-                    }
-                    f.flush()?;
+                let mut f = std::io::BufWriter::new(std::fs::File::create(&corpus_path)?);
+                writeln!(f, "# hybrid: aparrish/wordfreq-en-25000 (scaled counts) + dwyl/words_alpha tail (count=1)")?;
+                for (w, c) in items {
+                    writeln!(f, "{w}\t{c}")?;
+                }
+                f.flush()?;
 
-                    let _ = std::fs::remove_file(&tmp1);
-                    let _ = std::fs::remove_file(&tmp2);
+                let _ = std::fs::remove_file(&tmp1);
+                let _ = std::fs::remove_file(&tmp2);
                     if debug {
                         println!("base-pipeline: corpus done in {:.2?}", t0.elapsed());
                     }
@@ -2331,10 +2274,7 @@ fn main() -> anyhow::Result<()> {
                     }
                 } else {
                     if debug {
-                        println!(
-                            "base-pipeline: planning wordset: {}",
-                            wordset_path.display()
-                        );
+                        println!("base-pipeline: planning wordset: {}", wordset_path.display());
                     }
                     let t0 = std::time::Instant::now();
                     let cmd = Command::PlanPassphrase {
@@ -2366,7 +2306,7 @@ fn main() -> anyhow::Result<()> {
 
             // 5) generate examples + estimate enumeration time using the planned wordset
             {
-                let model = AnyTimingModel::load_json(&model_json)?;
+            let model = AnyTimingModel::load_json(&model_json)?;
                 let mut gcfg = GenerateConfig::default();
                 gcfg.words = words;
                 gcfg.separator = " ".to_string();
@@ -2412,12 +2352,7 @@ fn main() -> anyhow::Result<()> {
                 println!();
                 println!("top_generated:");
                 for (i, c) in best.iter().enumerate() {
-                    println!(
-                        "{:>2}. {:>8.3} ms  {}",
-                        i + 1,
-                        c.score.predicted_ms,
-                        c.phrase
-                    );
+                    println!("{:>2}. {:>8.3} ms  {}", i + 1, c.score.predicted_ms, c.phrase);
                 }
             }
         }
@@ -2473,9 +2408,9 @@ fn main() -> anyhow::Result<()> {
             let wordset_path = out_dir.join("wordset_user.txt");
 
             // 1) adapt base model with accumulated user rows
-            let base = fastphrase::model::DigraphModel::load_json(&base_model)
+            let base = phrasegen::model::DigraphModel::load_json(&base_model)
                 .with_context(|| format!("loading base model: {}", base_model.display()))?;
-            let user_rows = fastphrase::data::load_rows(&user_data)
+            let user_rows = phrasegen::data::load_rows(&user_data)
                 .with_context(|| format!("loading user data: {}", user_data.display()))?;
             let (tuned, stats) = adapt_digraph_model(
                 &base,
@@ -2497,7 +2432,7 @@ fn main() -> anyhow::Result<()> {
             }
             // Also build a personalized model that can impute unseen digraphs via backoff.
             let personalized_path = out_dir.join("model_personalized.json");
-            let (pm, _adapt_stats2, _bstats) = fastphrase::timing::build_personalized_model(
+            let (pm, _adapt_stats2, _bstats) = phrasegen::timing::build_personalized_model(
                 &base,
                 &user_rows,
                 AdaptConfig {
@@ -2602,12 +2537,7 @@ fn main() -> anyhow::Result<()> {
                 println!();
                 println!("top_generated:");
                 for (i, c) in best.iter().enumerate() {
-                    println!(
-                        "{:>2}. {:>8.3} ms  {}",
-                        i + 1,
-                        c.score.predicted_ms,
-                        c.phrase
-                    );
+                    println!("{:>2}. {:>8.3} ms  {}", i + 1, c.score.predicted_ms, c.phrase);
                 }
             }
         }
@@ -2638,16 +2568,13 @@ fn main() -> anyhow::Result<()> {
                 anyhow::bail!("test_frac must be in (0,1)");
             }
 
-            let mut rows = fastphrase::data::load_rows(&input)
+            let mut rows = phrasegen::data::load_rows(&input)
                 .with_context(|| format!("loading dataset: {}", input.display()))?;
             if let Some(pfx) = &source_prefix {
                 rows.retain(|r| r.source.as_deref().unwrap_or("").starts_with(pfx));
             }
             if rows.len() < 5 {
-                anyhow::bail!(
-                    "not enough rows to evaluate after filtering: {}",
-                    rows.len()
-                );
+                anyhow::bail!("not enough rows to evaluate after filtering: {}", rows.len());
             }
 
             let mut rng = rng_from_seed(seed);
@@ -2657,9 +2584,7 @@ fn main() -> anyhow::Result<()> {
                 rows.shuffle(&mut rng);
             }
             let n_total = rows.len();
-            let n_test = ((n_total as f64) * test_frac)
-                .round()
-                .clamp(1.0, (n_total - 1) as f64) as usize;
+            let n_test = ((n_total as f64) * test_frac).round().clamp(1.0, (n_total - 1) as f64) as usize;
             let (test_rows, train_rows) = rows.split_at(n_test);
 
             let (model, fit_stats) = fit_digraph_model(
@@ -2701,18 +2626,10 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 fn mae(&self) -> f64 {
-                    if self.n == 0 {
-                        0.0
-                    } else {
-                        self.sum_abs / (self.n as f64)
-                    }
+                    if self.n == 0 { 0.0 } else { self.sum_abs / (self.n as f64) }
                 }
                 fn rmse(&self) -> f64 {
-                    if self.n == 0 {
-                        0.0
-                    } else {
-                        (self.sum_sq / (self.n as f64)).sqrt()
-                    }
+                    if self.n == 0 { 0.0 } else { (self.sum_sq / (self.n as f64)).sqrt() }
                 }
                 fn corr(&self) -> f64 {
                     // Pearson correlation between y and yhat.
@@ -2737,10 +2654,8 @@ fn main() -> anyhow::Result<()> {
             let mut abs_err_digraph: Vec<f64> = Vec::new();
             let mut abs_err_phrase: Vec<f64> = Vec::new();
 
-            let mut by_source_digraph: std::collections::HashMap<String, Agg> =
-                std::collections::HashMap::new();
-            let mut by_source_phrase: std::collections::HashMap<String, Agg> =
-                std::collections::HashMap::new();
+            let mut by_source_digraph: std::collections::HashMap<String, Agg> = std::collections::HashMap::new();
+            let mut by_source_phrase: std::collections::HashMap<String, Agg> = std::collections::HashMap::new();
 
             #[derive(Debug, Clone)]
             struct WorstPhrase {
@@ -2754,7 +2669,7 @@ fn main() -> anyhow::Result<()> {
             let mut skipped_invalid = 0u64;
 
             for row in test_rows {
-                let grams = fastphrase::score::graphemes_normalized(&row.phrase);
+                let grams = phrasegen::score::graphemes_normalized(&row.phrase);
                 let n = grams.len();
                 if n < 2 {
                     continue;
@@ -2781,25 +2696,15 @@ fn main() -> anyhow::Result<()> {
                     abs_err_digraph.push((yhat - y).abs());
 
                     dig_all.push(y, yhat, seen);
-                    if seen {
-                        dig_seen.push(y, yhat, true);
-                    } else {
-                        dig_unseen.push(y, yhat, false);
-                    }
-                    by_source_digraph
-                        .entry(src.clone())
-                        .or_default()
-                        .push(y, yhat, seen);
+                    if seen { dig_seen.push(y, yhat, true); } else { dig_unseen.push(y, yhat, false); }
+                    by_source_digraph.entry(src.clone()).or_default().push(y, yhat, seen);
 
                     true_total += y;
                     pred_total += yhat;
                 }
 
                 phrase_all.push(true_total, pred_total, true);
-                by_source_phrase
-                    .entry(src.clone())
-                    .or_default()
-                    .push(true_total, pred_total, true);
+                by_source_phrase.entry(src.clone()).or_default().push(true_total, pred_total, true);
                 abs_err_phrase.push((pred_total - true_total).abs());
 
                 if show_worst {
@@ -2937,7 +2842,7 @@ fn main() -> anyhow::Result<()> {
             source_prefix,
             min_digraphs,
         } => {
-            let mut rows = fastphrase::data::load_rows(&input)
+            let mut rows = phrasegen::data::load_rows(&input)
                 .with_context(|| format!("loading dataset: {}", input.display()))?;
             if let Some(pfx) = &source_prefix {
                 rows.retain(|r| r.source.as_deref().unwrap_or("").starts_with(pfx));
@@ -2965,9 +2870,7 @@ fn main() -> anyhow::Result<()> {
                 dt_all.extend(r.digraph_dt_ms.iter().copied());
                 phrase_all.push(total);
                 let src = r.source.unwrap_or_else(|| "unknown".to_string());
-                let (dts, totals) = per_source
-                    .entry(src)
-                    .or_insert_with(|| (Vec::new(), Vec::new()));
+                let (dts, totals) = per_source.entry(src).or_insert_with(|| (Vec::new(), Vec::new()));
                 dts.extend(r.digraph_dt_ms);
                 totals.push(total);
                 kept_rows += 1;
@@ -3037,11 +2940,11 @@ fn main() -> anyhow::Result<()> {
             min_new_count,
             min_backoff_count,
         } => {
-            let base = fastphrase::model::DigraphModel::load_json(&base_model)
+            let base = phrasegen::model::DigraphModel::load_json(&base_model)
                 .with_context(|| format!("loading base model: {}", base_model.display()))?;
-            let user_rows = fastphrase::data::load_rows(&user_data)
+            let user_rows = phrasegen::data::load_rows(&user_data)
                 .with_context(|| format!("loading user data: {}", user_data.display()))?;
-            let (p, adapt_stats, bstats) = fastphrase::timing::build_personalized_model(
+            let (p, adapt_stats, bstats) = phrasegen::timing::build_personalized_model(
                 &base,
                 &user_rows,
                 AdaptConfig {
@@ -3056,16 +2959,10 @@ fn main() -> anyhow::Result<()> {
             p.save_json(&output_model)?;
             println!("output_model: {}", output_model.display());
             println!("adapt.user_rows_total: {}", adapt_stats.user_rows);
-            println!(
-                "adapt.user_digraph_obs_total: {}",
-                adapt_stats.user_digraph_obs
-            );
+            println!("adapt.user_digraph_obs_total: {}", adapt_stats.user_digraph_obs);
             println!("backoff.min_backoff_count: {}", min_backoff_count);
             println!("backoff.user_rows_used: {}", bstats.user_rows_used);
-            println!(
-                "backoff.user_digraph_obs_used: {}",
-                bstats.user_digraph_obs_used
-            );
+            println!("backoff.user_digraph_obs_used: {}", bstats.user_digraph_obs_used);
             println!("backoff.user_distinct_out: {}", bstats.user_distinct_out);
             println!("backoff.user_distinct_in: {}", bstats.user_distinct_in);
             println!("backoff.user_hand_groups: {}", bstats.user_hand_groups);
@@ -3098,25 +2995,8 @@ fn main() -> anyhow::Result<()> {
                 ch.is_ascii_uppercase()
                     || matches!(
                         ch,
-                        '!' | '@'
-                            | '#'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '('
-                            | ')'
-                            | '_'
-                            | '+'
-                            | '{'
-                            | '}'
-                            | '|'
-                            | ':'
-                            | '"'
-                            | '<'
-                            | '>'
-                            | '?'
+                        '!' | '@' | '#' | '$' | '%' | '^' | '&' | '*' | '(' | ')' | '_' | '+'
+                            | '{' | '}' | '|' | ':' | '"' | '<' | '>' | '?'
                     )
             }
             fn shift_frac_us(s: &str) -> f64 {
@@ -3165,8 +3045,13 @@ fn main() -> anyhow::Result<()> {
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
 
             // Apply style preset as defaults (still allows explicit overrides via flags).
-            let (mut separator, mut gap_regex, mut case, mut prefix_regex, mut suffix_regex) =
-                (separator, gap_regex, case, prefix_regex, suffix_regex);
+            let (mut separator, mut gap_regex, mut case, mut prefix_regex, mut suffix_regex) = (
+                separator,
+                gap_regex,
+                case,
+                prefix_regex,
+                suffix_regex,
+            );
             match style {
                 SampleStyle::Custom => {}
                 SampleStyle::Spaces => {
@@ -3276,9 +3161,8 @@ fn main() -> anyhow::Result<()> {
             }
 
             // Helper to build one phrase attempt (stable parts -> alternatives can reuse formatting).
-            let make_one = |rng: &mut dyn rand::RngCore,
-                            rng_gap: &mut rand08::rngs::StdRng|
-             -> anyhow::Result<Parts> {
+            let make_one =
+                |rng: &mut dyn rand::RngCore, rng_gap: &mut rand08::rngs::StdRng| -> anyhow::Result<Parts> {
                 let mut picked: Vec<String> = Vec::with_capacity(words);
                 if allow_repeats {
                     for _ in 0..words {
@@ -3292,9 +3176,7 @@ fn main() -> anyhow::Result<()> {
                     let mut idx: Vec<usize> = (0..wl.words.len()).collect();
                     idx.shuffle(rng);
                     if idx.len() < words {
-                        anyhow::bail!(
-                            "wordlist too small for allow_repeats=false and words={words}"
-                        );
+                        anyhow::bail!("wordlist too small for allow_repeats=false and words={words}");
                     }
                     for &i in idx.iter().take(words) {
                         picked.push(apply_case(&wl.words[i], case, rng));
@@ -3373,7 +3255,7 @@ fn main() -> anyhow::Result<()> {
                             continue;
                         }
                     }
-                    let ms = fastphrase::score::score_phrase(&model, &phrase).predicted_ms as f64;
+                    let ms = phrasegen::score::score_phrase(&model, &phrase).predicted_ms as f64;
                     v.push(ms);
                 }
                 v.sort_by(|a, b| a.total_cmp(b));
@@ -3444,7 +3326,7 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
 
-                let sc0 = fastphrase::score::score_phrase(&model, &phrase);
+                let sc0 = phrasegen::score::score_phrase(&model, &phrase);
                 let ms0 = sc0.predicted_ms as f64;
                 let digraphs0 = sc0.digraphs.max(1) as f64;
                 let ms_per_digraph0 = ms0 / digraphs0;
@@ -3492,9 +3374,7 @@ fn main() -> anyhow::Result<()> {
                     let mut rng_alt = rng_from_seed(seed.map(|s| s ^ 0x51d7_6e3a_9f03_17c1));
                     for pos in 0..parts.words.len() {
                         for _ in 0..alt_tries.max(1) {
-                            let Some(w) = wl.words.choose(&mut rng_alt) else {
-                                break;
-                            };
+                            let Some(w) = wl.words.choose(&mut rng_alt) else { break };
                             let new_word = apply_case(w, case, &mut rng_alt);
                             if new_word == parts.words[pos] {
                                 continue;
@@ -3513,8 +3393,7 @@ fn main() -> anyhow::Result<()> {
                                     continue;
                                 }
                             }
-                            let ms =
-                                fastphrase::score::score_phrase(&model, &s2).predicted_ms as f64;
+                            let ms = phrasegen::score::score_phrase(&model, &s2).predicted_ms as f64;
                             cand.push(Alt {
                                 ms,
                                 phrase: s2,
@@ -3527,17 +3406,19 @@ fn main() -> anyhow::Result<()> {
                     cand.dedup_by(|a, b| a.phrase == b.phrase);
                     match alt_mode {
                         AltMode::Faster => cand.sort_by(|a, b| a.ms.total_cmp(&b.ms)),
-                        AltMode::Similar => cand.sort_by(|a, b| {
-                            let da = (a.ms - ms0).abs();
-                            let db = (b.ms - ms0).abs();
-                            da.total_cmp(&db).then_with(|| a.ms.total_cmp(&b.ms))
-                        }),
+                        AltMode::Similar => {
+                            cand.sort_by(|a, b| {
+                                let da = (a.ms - ms0).abs();
+                                let db = (b.ms - ms0).abs();
+                                da.total_cmp(&db).then_with(|| a.ms.total_cmp(&b.ms))
+                            })
+                        }
                     }
                     let take = alternatives.min(cand.len());
                     if take > 0 {
                         println!("  alternatives ({:?}):", alt_mode);
                         for a in cand.into_iter().take(take) {
-                            let sca = fastphrase::score::score_phrase(&model, &a.phrase);
+                            let sca = phrasegen::score::score_phrase(&model, &a.phrase);
                             let norma = {
                                 let denom = (sca.digraphs as f64) * (model.global_mean_ms() as f64);
                                 if denom > 0.0 {
@@ -3548,9 +3429,9 @@ fn main() -> anyhow::Result<()> {
                             };
                             let ms_per_dga = a.ms / (sca.digraphs.max(1) as f64);
                             let shifta = shift_frac_us(&a.phrase);
-                            if let Some(ref_ms) = ref_sorted_ms.as_ref() {
-                                let pct = fast_pct(a.ms, ref_ms);
-                                println!(
+                           if let Some(ref_ms) = ref_sorted_ms.as_ref() {
+                               let pct = fast_pct(a.ms, ref_ms);
+                               println!(
                                     "   - {:>9.3} ms  fast_pct={:>6.2}  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  (Δ{:+.3})  swap_pos={} -> {}  {}",
                                     a.ms,
                                     pct,
@@ -3562,8 +3443,8 @@ fn main() -> anyhow::Result<()> {
                                     a.word,
                                     a.phrase
                                );
-                            } else {
-                                println!(
+                           } else {
+                               println!(
                                     "   - {:>9.3} ms  norm={:>6.3}  ms/dg={:>6.1}  shift={:>5.3}  (Δ{:+.3})  swap_pos={} -> {}  {}",
                                     a.ms,
                                     norma,
@@ -3574,7 +3455,7 @@ fn main() -> anyhow::Result<()> {
                                     a.word,
                                     a.phrase
                                );
-                            }
+                           }
                         }
                     }
                 }
@@ -3658,25 +3539,8 @@ fn main() -> anyhow::Result<()> {
                 ch.is_ascii_uppercase()
                     || matches!(
                         ch,
-                        '!' | '@'
-                            | '#'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '('
-                            | ')'
-                            | '_'
-                            | '+'
-                            | '{'
-                            | '}'
-                            | '|'
-                            | ':'
-                            | '"'
-                            | '<'
-                            | '>'
-                            | '?'
+                        '!' | '@' | '#' | '$' | '%' | '^' | '&' | '*' | '(' | ')' | '_' | '+'
+                            | '{' | '}' | '|' | ':' | '"' | '<' | '>' | '?'
                     )
             }
             fn shift_frac_us(s: &str) -> f64 {
@@ -3758,8 +3622,7 @@ fn main() -> anyhow::Result<()> {
                 Some(-alpha.ln() / (np as f64))
             }
             fn top_k_counts(counts: &HashMap<String, u32>, k: usize) -> Vec<(String, u32)> {
-                let mut v: Vec<(String, u32)> =
-                    counts.iter().map(|(s, &c)| (s.clone(), c)).collect();
+                let mut v: Vec<(String, u32)> = counts.iter().map(|(s, &c)| (s.clone(), c)).collect();
                 v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
                 v.truncate(k);
                 v
@@ -3794,8 +3657,13 @@ fn main() -> anyhow::Result<()> {
                 .unwrap_or(0);
 
             // Apply style preset as defaults (same logic as sample-passphrases).
-            let (mut separator, mut gap_regex, mut case, prefix_regex, mut suffix_regex) =
-                (separator, gap_regex, case, prefix_regex, suffix_regex);
+            let (mut separator, mut gap_regex, mut case, prefix_regex, mut suffix_regex) = (
+                separator,
+                gap_regex,
+                case,
+                prefix_regex,
+                suffix_regex,
+            );
             match style {
                 SampleStyle::Custom => {}
                 SampleStyle::Spaces => {
@@ -3921,60 +3789,57 @@ fn main() -> anyhow::Result<()> {
                 s.push_str(&parts.suffix);
                 s
             }
-            let make_one = |rng: &mut dyn rand::RngCore,
-                            rng_gap: &mut rand08::rngs::StdRng|
-             -> anyhow::Result<Parts> {
-                let mut picked: Vec<String> = Vec::with_capacity(words);
-                if allow_repeats {
-                    for _ in 0..words {
-                        let Some(w) = wl.words.choose(rng) else {
-                            anyhow::bail!("unexpected empty wordlist");
-                        };
-                        picked.push(apply_case(w, case, rng));
+            let make_one =
+                |rng: &mut dyn rand::RngCore, rng_gap: &mut rand08::rngs::StdRng| -> anyhow::Result<Parts> {
+                    let mut picked: Vec<String> = Vec::with_capacity(words);
+                    if allow_repeats {
+                        for _ in 0..words {
+                            let Some(w) = wl.words.choose(rng) else {
+                                anyhow::bail!("unexpected empty wordlist");
+                            };
+                            picked.push(apply_case(w, case, rng));
+                        }
+                    } else {
+                        let mut idx: Vec<usize> = (0..wl.words.len()).collect();
+                        idx.shuffle(rng);
+                        if idx.len() < words {
+                            anyhow::bail!("wordlist too small for allow_repeats=false and words={words}");
+                        }
+                        for &i in idx.iter().take(words) {
+                            picked.push(apply_case(&wl.words[i], case, rng));
+                        }
                     }
-                } else {
-                    let mut idx: Vec<usize> = (0..wl.words.len()).collect();
-                    idx.shuffle(rng);
-                    if idx.len() < words {
-                        anyhow::bail!(
-                            "wordlist too small for allow_repeats=false and words={words}"
-                        );
-                    }
-                    for &i in idx.iter().take(words) {
-                        picked.push(apply_case(&wl.words[i], case, rng));
-                    }
-                }
 
-                let prefix = if let Some(dist) = &prefix_dist {
-                    rand08::distributions::Distribution::sample(dist, rng_gap)
-                } else {
-                    String::new()
-                };
-                let suffix = if let Some(dist) = &suffix_dist {
-                    rand08::distributions::Distribution::sample(dist, rng_gap)
-                } else {
-                    String::new()
-                };
+                    let prefix = if let Some(dist) = &prefix_dist {
+                        rand08::distributions::Distribution::sample(dist, rng_gap)
+                    } else {
+                        String::new()
+                    };
+                    let suffix = if let Some(dist) = &suffix_dist {
+                        rand08::distributions::Distribution::sample(dist, rng_gap)
+                    } else {
+                        String::new()
+                    };
 
-                let mut gaps: Vec<String> = Vec::new();
-                if words >= 2 {
-                    gaps.reserve(words - 1);
-                    for _ in 0..(words - 1) {
-                        let g = if let Some(dist) = &gap_dist {
-                            rand08::distributions::Distribution::sample(dist, rng_gap)
-                        } else {
-                            separator.clone()
-                        };
-                        gaps.push(g);
+                    let mut gaps: Vec<String> = Vec::new();
+                    if words >= 2 {
+                        gaps.reserve(words - 1);
+                        for _ in 0..(words - 1) {
+                            let g = if let Some(dist) = &gap_dist {
+                                rand08::distributions::Distribution::sample(dist, rng_gap)
+                            } else {
+                                separator.clone()
+                            };
+                            gaps.push(g);
+                        }
                     }
-                }
-                Ok(Parts {
-                    prefix,
-                    words: picked,
-                    gaps,
-                    suffix,
-                })
-            };
+                    Ok(Parts {
+                        prefix,
+                        words: picked,
+                        gaps,
+                        suffix,
+                    })
+                };
 
             let mut tries_total = 0usize;
             let mut freq_base: HashMap<String, u32> = HashMap::new();
@@ -3994,12 +3859,10 @@ fn main() -> anyhow::Result<()> {
                 (0..words).map(|_| HashMap::new()).collect();
             let mut wordpos_picked: Vec<HashMap<String, u32>> =
                 (0..words).map(|_| HashMap::new()).collect();
-            let mut wordpairs_base: Vec<HashMap<String, u32>> = (0..words.saturating_sub(1))
-                .map(|_| HashMap::new())
-                .collect();
-            let mut wordpairs_picked: Vec<HashMap<String, u32>> = (0..words.saturating_sub(1))
-                .map(|_| HashMap::new())
-                .collect();
+            let mut wordpairs_base: Vec<HashMap<String, u32>> =
+                (0..words.saturating_sub(1)).map(|_| HashMap::new()).collect();
+            let mut wordpairs_picked: Vec<HashMap<String, u32>> =
+                (0..words.saturating_sub(1)).map(|_| HashMap::new()).collect();
             let mut wordtuple_base: HashMap<String, u32> = HashMap::new();
             let mut wordtuple_picked: HashMap<String, u32> = HashMap::new();
 
@@ -4029,18 +3892,17 @@ fn main() -> anyhow::Result<()> {
                     let scrubbed_words: Vec<String> = parts
                         .words
                         .iter()
-                        .map(|w| fastphrase::textprep::scrub(w))
+                        .map(|w| phrasegen::textprep::scrub(w))
                         .collect();
                     return Ok((phrase, scrubbed_words));
                 }
             };
 
             for _ in 0..samples {
-                let mut candidates: Vec<(String, Vec<String>, f64, f64)> =
-                    Vec::with_capacity(pick_best_of);
+                let mut candidates: Vec<(String, Vec<String>, f64, f64)> = Vec::with_capacity(pick_best_of);
                 for _ in 0..pick_best_of {
                     let (phrase, scrubbed_words) = sample_valid(&mut rng, &mut rng_gap)?;
-                    let sc = fastphrase::score::score_phrase(&model, &phrase);
+                    let sc = phrasegen::score::score_phrase(&model, &phrase);
                     let ms = sc.predicted_ms as f64;
                     let hit = if sc.digraphs == 0 {
                         0.0
@@ -4081,8 +3943,12 @@ fn main() -> anyhow::Result<()> {
                         *wordpairs_picked[i].entry(k2).or_insert(0) += 1;
                     }
                 }
-                *wordtuple_base.entry(base_words.join("\t")).or_insert(0) += 1;
-                *wordtuple_picked.entry(best_words.join("\t")).or_insert(0) += 1;
+                *wordtuple_base
+                    .entry(base_words.join("\t"))
+                    .or_insert(0) += 1;
+                *wordtuple_picked
+                    .entry(best_words.join("\t"))
+                    .or_insert(0) += 1;
 
                 if let Some(counts) = corpus_counts.as_ref() {
                     idf_base.push(idf_phrase(&base_words, counts, corpus_total));
@@ -4148,10 +4014,7 @@ fn main() -> anyhow::Result<()> {
             };
             println!("draws_total: {}", draws_total);
             println!("accept_rate: {:.6}", accept_rate);
-            println!(
-                "nominal_bits_upperish (ignores rejection + non-uniform regex): {:.3}",
-                nominal_bits
-            );
+            println!("nominal_bits_upperish (ignores rejection + non-uniform regex): {:.3}", nominal_bits);
             println!();
 
             let report = |label: &str,
@@ -4188,10 +4051,7 @@ fn main() -> anyhow::Result<()> {
                     mmean, mstd, ms_p50, ms_p95, ms_p99
                 );
                 println!("  hit: mean={:.3} p05={:.3}", hit_mean, hit_p05);
-                println!(
-                    "  shift_frac_us: mean={:.3} p95={:.3}",
-                    shift_mean, shift_p95
-                );
+                println!("  shift_frac_us: mean={:.3} p95={:.3}", shift_mean, shift_p95);
                 println!("  chars: mean={:.1} p95={:.1}", chars_mean, chars_p95);
                 if !idf.is_empty() {
                     let idf_p50 = quantile(idf.clone(), 0.50);
@@ -4206,7 +4066,10 @@ fn main() -> anyhow::Result<()> {
                 if counts.len() == n as usize {
                     println!("  note: no repeats observed -> output-entropy plugin estimate is sample-size-limited (true entropy likely much larger)");
                 }
-                println!("  collision_prob_est: sum_p2≈{:.6}  (so H2≈{:.3})", p2, h2);
+                println!(
+                    "  collision_prob_est: sum_p2≈{:.6}  (so H2≈{:.3})",
+                    p2, h2
+                );
                 if cpairs == 0 {
                     if let Some(p2_ub) = p2_upper_bound_zero_collisions(n, 0.05) {
                         let h2_lb = if p2_ub > 0.0 { -log2_f64(p2_ub) } else { 0.0 };
@@ -4387,8 +4250,9 @@ fn main() -> anyhow::Result<()> {
 
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let counts = load_corpus_counts(&corpus, ascii_lower_only, min_word_len, max_word_len)
-                .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
+            let counts =
+                load_corpus_counts(&corpus, ascii_lower_only, min_word_len, max_word_len)
+                    .with_context(|| format!("loading corpus counts: {}", corpus.display()))?;
             if counts.is_empty() {
                 anyhow::bail!("empty corpus after filtering");
             }
@@ -4400,7 +4264,7 @@ fn main() -> anyhow::Result<()> {
             words.truncate(take);
 
             let mut n_words = 0u64;
-            let mut n_zero_digraphs = 0u64;
+           let mut n_zero_digraphs = 0u64;
             let mut sum_norm = 0.0f64;
             let mut sum_norm_sq = 0.0f64;
             let mut sum_hit_frac = 0.0f64;
@@ -4421,9 +4285,9 @@ fn main() -> anyhow::Result<()> {
             let mut worst: Vec<Worst> = Vec::new();
 
             for w in words.iter() {
-                let sc = fastphrase::score::score_phrase(&model, w);
+                let sc = phrasegen::score::score_phrase(&model, w);
                 if sc.digraphs == 0 {
-                    n_zero_digraphs += 1;
+                   n_zero_digraphs += 1;
                     continue;
                 }
                 let denom = (sc.digraphs as f64) * (model.global_mean_ms() as f64);
@@ -4477,7 +4341,7 @@ fn main() -> anyhow::Result<()> {
             println!("corpus: {}", corpus.display());
             println!("words_considered: {}", take);
             println!("words_scored: {}", n_words);
-            println!("words_with_zero_digraphs: {}", n_zero_digraphs);
+           println!("words_with_zero_digraphs: {}", n_zero_digraphs);
             println!("normalized_vs_global.mean: {:.6}", mean);
             println!("normalized_vs_global.std: {:.6}", std);
             let (_qn, qmin, q50, q90, q95, q99, qmax) = quantiles(norms);
@@ -4580,9 +4444,7 @@ fn main() -> anyhow::Result<()> {
             // Restrict to styles with known entropy accounting.
             for &st in style.iter() {
                 if matches!(st, SampleStyle::Custom) {
-                    anyhow::bail!(
-                        "ParetoStyles does not support style=custom (entropy accounting undefined)"
-                    );
+                    anyhow::bail!("ParetoStyles does not support style=custom (entropy accounting undefined)");
                 }
             }
 
@@ -4648,9 +4510,7 @@ fn main() -> anyhow::Result<()> {
 
             fn style_case(style: SampleStyle) -> CaseMode {
                 match style {
-                    SampleStyle::LoginTitle2Digits | SampleStyle::LoginTitleEndPunct => {
-                        CaseMode::Title
-                    }
+                    SampleStyle::LoginTitle2Digits | SampleStyle::LoginTitleEndPunct => CaseMode::Title,
                     _ => CaseMode::Lower,
                 }
             }
@@ -4720,25 +4580,8 @@ fn main() -> anyhow::Result<()> {
                 ch.is_ascii_uppercase()
                     || matches!(
                         ch,
-                        '!' | '@'
-                            | '#'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '('
-                            | ')'
-                            | '_'
-                            | '+'
-                            | '{'
-                            | '}'
-                            | '|'
-                            | ':'
-                            | '"'
-                            | '<'
-                            | '>'
-                            | '?'
+                        '!' | '@' | '#' | '$' | '%' | '^' | '&' | '*' | '(' | ')' | '_' | '+'
+                            | '{' | '}' | '|' | ':' | '"' | '<' | '>' | '?'
                     )
             }
 
@@ -4780,8 +4623,7 @@ fn main() -> anyhow::Result<()> {
                 for &n0 in &n {
                     let n0 = n0.min(wl.words.len()).max(2);
                     let wsub = &wl.words[..n0];
-                    let mut rng =
-                        rng_from_seed(seed.map(|s| s ^ ((n0 as u64) << 1) ^ ((st as u64) << 48)));
+                    let mut rng = rng_from_seed(seed.map(|s| s ^ ((n0 as u64) << 1) ^ ((st as u64) << 48)));
 
                     let case = style_case(st);
                     let mut ms_samples: Vec<f64> = Vec::with_capacity(samples);
@@ -4816,12 +4658,12 @@ fn main() -> anyhow::Result<()> {
                                 }
                             }
                             let ww = apply_case(w, case, &mut rng);
-                            chosen_words.push(fastphrase::textprep::scrub(&ww));
+                            chosen_words.push(phrasegen::textprep::scrub(&ww));
                             s.push_str(&ww);
                         }
                         s.push_str(&rand_suffix(st, &mut rng));
 
-                        let sc = fastphrase::score::score_phrase(&model, &s);
+                        let sc = phrasegen::score::score_phrase(&model, &s);
                         let ms = sc.predicted_ms as f64;
                         let hit_frac = if sc.digraphs == 0 {
                             0.0
@@ -4848,10 +4690,7 @@ fn main() -> anyhow::Result<()> {
                     let chars_p95 = quantile(chars.clone(), 0.95);
                     let shift_p95 = quantile(shift_fracs.clone(), 0.95);
                     let (idf_mean, idf_p05) = if corpus_counts.is_some() {
-                        (
-                            Some(quantile(idfs.clone(), 0.50)),
-                            Some(quantile(idfs.clone(), 0.05)),
-                        )
+                        (Some(quantile(idfs.clone(), 0.50)), Some(quantile(idfs.clone(), 0.05)))
                     } else {
                         (None, None)
                     };
@@ -5057,7 +4896,7 @@ fn run_plan_passphrase(cmd: Command) -> anyhow::Result<()> {
             skipped_low_vowels += 1;
             continue;
         }
-        let sc = fastphrase::score::score_phrase(&model, w);
+        let sc = phrasegen::score::score_phrase(&model, w);
         if sc.digraphs == 0 {
             continue;
         }
@@ -5069,11 +4908,7 @@ fn run_plan_passphrase(cmd: Command) -> anyhow::Result<()> {
         let ms = sc.predicted_ms as f64;
         let ms_per_bit = if objective == WordsetObjective::MsPerLmBit {
             let bits = km.surprisal_bits(w);
-            if bits > 0.0 {
-                ms / bits
-            } else {
-                f64::INFINITY
-            }
+            if bits > 0.0 { ms / bits } else { f64::INFINITY }
         } else {
             f64::INFINITY
         };
@@ -5176,7 +5011,7 @@ fn load_corpus_counts(
         let Some(word_raw) = it.next() else { continue };
         let count: u64 = it.next().and_then(|s| s.parse().ok()).unwrap_or(1);
 
-        let w = fastphrase::textprep::scrub(word_raw);
+        let w = phrasegen::textprep::scrub(word_raw);
         if w.len() < min_word_len || w.len() > max_word_len {
             continue;
         }
@@ -5223,3 +5058,4 @@ fn title_case_ascii(word: &str) -> String {
     }
     out
 }
+

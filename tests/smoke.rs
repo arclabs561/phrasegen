@@ -1,7 +1,7 @@
-use fastphrase::adapt::{adapt_digraph_model, AdaptConfig};
-use fastphrase::data::load_rows;
-use fastphrase::model::{fit_digraph_model, DigraphModel, FitConfig};
-use fastphrase::score::score_phrase;
+use phrasegen::adapt::{adapt_digraph_model, AdaptConfig};
+use phrasegen::data::load_rows;
+use phrasegen::model::{fit_digraph_model, DigraphModel, FitConfig};
+use phrasegen::score::score_phrase;
 
 #[test]
 fn fit_and_score_smoke() {
@@ -49,16 +49,10 @@ fn adapt_model_smoke() {
             clamp_dt_ms: None,
         },
     );
-    let (tuned, stats) = adapt_digraph_model(
-        &base,
-        &rows,
-        AdaptConfig {
-            prior_count: 1.0,
-            min_new_count: 1,
-        },
-    );
+    let (tuned, stats) = adapt_digraph_model(&base, &rows, AdaptConfig { prior_count: 1.0, min_new_count: 1 });
     assert!(stats.user_rows >= 1);
     // Should still be able to score.
     let s = score_phrase(&tuned, "hello world");
     assert!(s.predicted_ms >= 0.0);
 }
+
