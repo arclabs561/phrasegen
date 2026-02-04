@@ -229,6 +229,60 @@ In addition, when there are **0 observed collisions** among \(n\) samples, we pr
 probability \(p_2\) (hence a lower bound on \(H_2\)) using a binomial approximation over the \(\binom{n}{2}\) sample pairs:
 \(p_2 \lesssim -\ln(0.05) / \binom{n}{2}\).
 
+### Canonical generator policy (recommended)
+
+For a “maximally secure *and* easy typing” default that stays close to the clean entropy story:
+
+- **generator**: `sample-passphrases --style numbers-symbols --words 4 --max-chars 28`
+- **sampling**: generate **one** uniformly random output (no manual picking among alternatives)
+- **wordset**: use a planned wordset that meets target bits under uniform sampling (`plan-passphrase --target-bits 60 ...`)
+
+If you display alternatives and manually pick, you are **changing the distribution**. `--pick-best-of M` in `analyze-generator`
+is our crude model of that bias.
+
+### Real output example (50k samples, pick-best-of 10)
+
+This command:
+
+```bash
+cargo run -- analyze-generator \
+  --model data/base12/model_union.json \
+  --wordlist data/base12/wordset.txt \
+  --style numbers-symbols \
+  --words 4 \
+  --samples 50000 \
+  --pick-best-of 10 \
+  --max-chars 28 \
+  --seed 1 \
+  --show-top 0
+```
+
+Produced (excerpt):
+
+```text
+accept_rate: 1.000000
+nominal_bits_upperish (ignores rejection + non-uniform regex): 72.966
+
+baseline (pick_best_of=1 semantics):
+  observed_collision_pairs: 0 / 1249975000
+  ms: mean=5005.7 ... p95=5727.6
+  hit: mean=0.760 p05=0.700
+  collision_bound_95pct: p2 <= 2.396634e-9  =>  H2 >= 28.636  (binomial approx, 0 collisions)
+
+picked_fastest_of_10 (models manual choice):
+  ms: mean=4394.6 ... p95=4738.8
+  hit: mean=0.708 p05=0.667
+
+word_marginal_entropy_bits (upper bound on joint entropy):
+  Δ(sum_positions) (picked - baseline): ΔH1=-1.271 ΔH2=-1.731 ΔHinf=-2.860
+typing_gain_ms (picked - baseline): Δmean=-611.1  Δp95=-988.8
+```
+
+Interpretation:
+- The **collision bound** gives a conservative, repeat-free **lower bound** on collision entropy \(H_2\) of the *output distribution*.
+- The **word-marginal deltas** are a practical “bias meter”: picking the fastest of 10 improves typing time, but it measurably
+  concentrates the distribution (especially in \(H_\infty\)).
+
 Two mechanisms reduce entropy in practice:
 
 - **Rejection sampling**: `--max-chars`/`--min-chars` filters proposals. The resulting distribution is the proposal distribution
