@@ -3383,6 +3383,11 @@ fn main() -> anyhow::Result<()> {
                     v[idx]
                 };
                 println!("percentile_ref.samples: {}", v.len());
+                println!("percentile_ref.tries: {}", tries);
+                println!(
+                    "percentile_ref.accept_rate: {:.6}",
+                    (want as f64) / (tries.max(1) as f64)
+                );
                 println!(
                     "percentile_ref.ms_quantiles(p50/p90/p95/p99): {:.3}/{:.3}/{:.3}/{:.3}",
                     at(0.50),
@@ -3577,6 +3582,11 @@ fn main() -> anyhow::Result<()> {
                 out += 1;
             }
             println!("(done) sampled {out}/{count}");
+            println!("sampling.tries: {}", tries);
+            println!(
+                "sampling.accept_rate: {:.6}",
+                (out as f64) / (tries.max(1) as f64)
+            );
         }
         Command::AnalyzeGenerator {
             model,

@@ -117,6 +117,10 @@ When `--meta` is enabled, we also print:
 - `ms/dg`: \( \widehat{T}(s) / m \) (ms per digraph), a length-normalized speed.
 - `shift`: fraction of characters that likely require shift on a US layout (heuristic).
 
+At the end, we print:
+- `sampling.tries` and `sampling.accept_rate`: how often proposals satisfied your constraints (low rate means constraints are very tight).
+- If `--percentile` is enabled, we also print `percentile_ref.accept_rate` for the reference distribution under the same constraints.
+
 ## 1Password-style “Memorable Password” separators
 
 1Password’s generator offers a “Memorable” password type with options including **hyphen separators**, and (per 1Password staff) separators that are **Numbers** or **Numbers and Symbols** instead of hyphens.
