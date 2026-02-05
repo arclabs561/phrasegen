@@ -12,12 +12,16 @@ fn personalized_backoff_imputes_unseen_digraphs() {
         Row {
             phrase: "ab".to_string(),
             digraph_dt_ms: vec![100.0],
+            total_ms: None,
+            backspaces: None,
             source: Some("user".to_string()),
             note: None,
         },
         Row {
             phrase: "ac".to_string(),
             digraph_dt_ms: vec![100.0],
+            total_ms: None,
+            backspaces: None,
             source: Some("user".to_string()),
             note: None,
         },
@@ -49,6 +53,8 @@ fn any_timing_model_loads_personalized_and_scores() {
     let user_rows = vec![Row {
         phrase: "ab".to_string(),
         digraph_dt_ms: vec![100.0],
+        total_ms: None,
+        backspaces: None,
         source: Some("user".to_string()),
         note: None,
     }];
@@ -70,4 +76,3 @@ fn any_timing_model_loads_personalized_and_scores() {
     let ms = any.mean_ms_for("a", "b");
     assert!((ms - 100.0).abs() < 1e-3, "ms={ms}");
 }
-

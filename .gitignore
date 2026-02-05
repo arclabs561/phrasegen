@@ -2,6 +2,7 @@ target/
 **/*.rs.bk
 data/**
 !data/example.csv
+!data/wordlist.txt
 artifacts/
 .DS_Store
 .env

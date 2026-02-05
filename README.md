@@ -3,11 +3,20 @@
 Generate and score passphrase-style strings using a learned **typing-timing model** (digraph latencies), so you can trade off **security bits** vs **predicted entry time**.
 
 This repo is designed to “just work” from public datasets, and optionally adapt to your own typing over time.
+The intent is practical: make the speed/security tradeoff explicit, measurable, and repeatable.
 
 ## Requirements
 
 - Rust toolchain (see `Cargo.toml` `rust-version`)
 - Optional: [`just`](https://github.com/casey/just) for the convenience recipes in `justfile`
+
+## Install
+
+From the repo root:
+
+```bash
+cargo install --path .
+```
 
 ## Quick start (what to run)
 
@@ -30,6 +39,7 @@ just sample data/user/model_personalized.json data/user/wordset_user.txt 10
 Notes:
 - Generated artifacts live under `data/` and are ignored by default (see `.gitignore`).
 - Run `cargo run -- --help` to see the full CLI, or `just --list` for recipes.
+- For real passwords, avoid `--seed` (it is for reproducible demos/experiments).
 
 ## Deterministic demo output (seed=42)
 
@@ -61,6 +71,8 @@ Start at `docs/README.md`, or jump directly:
 - `docs/guide.md`: how to run it day-to-day (constraints, styles, diagnostics)
 - `docs/datasets.md`: what we download and how it becomes rows
 - `docs/math.md`: equations + interpretation notes
+- `docs/experiments.md`: reproducible experiments + how to scale them up
+- `docs/security.md`: attacker model + what “bits” means here
 
 ## Public data sources (base model)
 

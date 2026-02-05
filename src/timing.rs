@@ -10,6 +10,20 @@ pub trait TimingModel {
     fn mean_ms_for(&self, a: &str, b: &str) -> f32;
     fn global_mean_ms(&self) -> f32;
     fn has_digraph(&self, a: &str, b: &str) -> bool;
+
+    /// Optional per-digraph variance diagnostic (ms^2).
+    ///
+    /// Default: not available.
+    fn var_ms2_for(&self, _a: &str, _b: &str) -> Option<f32> {
+        None
+    }
+
+    /// Optional global fallback variance diagnostic (ms^2).
+    ///
+    /// Default: not available.
+    fn global_var_ms2(&self) -> Option<f32> {
+        None
+    }
 }
 
 impl TimingModel for DigraphModel {
@@ -21,6 +35,12 @@ impl TimingModel for DigraphModel {
     }
     fn has_digraph(&self, a: &str, b: &str) -> bool {
         DigraphModel::has_digraph(self, a, b)
+    }
+    fn var_ms2_for(&self, a: &str, b: &str) -> Option<f32> {
+        Some(DigraphModel::var_ms2_for(self, a, b))
+    }
+    fn global_var_ms2(&self) -> Option<f32> {
+        Some(DigraphModel::global_var_ms2(self))
     }
 }
 
@@ -150,6 +170,13 @@ pub fn build_personalized_model(
     adapt_cfg: adapt::AdaptConfig,
     min_backoff_count: u32,
 ) -> (PersonalizedModel, adapt::AdaptStats, BuildPersonalizedStats) {
+    // Only use "clean" rows (no correction events) for timing-model adaptation by default.
+    let user_rows: Vec<data::Row> = user_rows
+        .iter()
+        .filter(|r| r.backspaces.unwrap_or(0) == 0)
+        .cloned()
+        .collect();
+    let user_rows: &[data::Row] = &user_rows;
     let (tuned, adapt_stats) = adapt::adapt_digraph_model(base, user_rows, adapt_cfg);
 
     let mut out_sum: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
@@ -438,6 +465,15 @@ impl TimingModel for PersonalizedModel {
     fn has_digraph(&self, a: &str, b: &str) -> bool {
         self.tuned.has_digraph(a, b) || self.base.has_digraph(a, b)
     }
+
+    fn var_ms2_for(&self, a: &str, b: &str) -> Option<f32> {
+        // Best-effort: surface variance diagnostics from the tuned model if present.
+        Some(self.tuned.var_ms2_for(a, b))
+    }
+
+    fn global_var_ms2(&self) -> Option<f32> {
+        Some(self.tuned.global_var_ms2())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -475,6 +511,20 @@ impl TimingModel for AnyTimingModel {
         match self {
             AnyTimingModel::Digraph(m) => m.has_digraph(a, b),
             AnyTimingModel::Personalized(m) => m.has_digraph(a, b),
+        }
+    }
+
+    fn var_ms2_for(&self, a: &str, b: &str) -> Option<f32> {
+        match self {
+            AnyTimingModel::Digraph(m) => Some(m.var_ms2_for(a, b)),
+            AnyTimingModel::Personalized(m) => m.var_ms2_for(a, b),
+        }
+    }
+
+    fn global_var_ms2(&self) -> Option<f32> {
+        match self {
+            AnyTimingModel::Digraph(m) => Some(m.global_var_ms2()),
+            AnyTimingModel::Personalized(m) => m.global_var_ms2(),
         }
     }
 }

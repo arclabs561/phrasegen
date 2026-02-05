@@ -191,11 +191,14 @@ fn is_ascii_lower_word(s: &str) -> bool {
 /// Convenience for deterministic generation from a seed.
 pub fn rng_from_seed(seed: Option<u64>) -> impl rand::RngCore {
     match seed {
-        Some(seed) => rand_chacha::ChaCha8Rng::seed_from_u64(seed),
+        // Use a conservative CSPRNG variant (ChaCha20) for passphrase generation.
+        //
+        // `--seed` is for reproducible demos/experiments; for real passwords, omit it.
+        Some(seed) => rand_chacha::ChaCha20Rng::seed_from_u64(seed),
         None => {
             let mut seed_bytes = [0u8; 32];
             rand::rng().fill(&mut seed_bytes);
-            rand_chacha::ChaCha8Rng::from_seed(seed_bytes)
+            rand_chacha::ChaCha20Rng::from_seed(seed_bytes)
         }
     }
 }

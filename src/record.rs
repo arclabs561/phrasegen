@@ -50,12 +50,18 @@ fn record_once_inner(cfg: &RecordConfig) -> anyhow::Result<RecordOutcome> {
     } else {
         eprintln!("Type anything (Enter to submit, Esc to cancel):");
     }
-    eprintln!("(Backspace aborts this sample.)");
+    if cfg.abort_on_backspace {
+        eprintln!("(Backspace aborts this sample.)");
+    } else {
+        eprintln!("(Backspace is allowed; timings include correction overhead.)");
+    }
     eprintln!();
 
-    let mut phrase = String::new();
-    let mut dts_ms: Vec<f32> = Vec::new();
-    let mut last: Option<Instant> = None;
+    // Store the current (editable) character buffer and the timestamp each character was typed.
+    // This lets us support backspace while still producing a final phrase and a digraph dt vector.
+    let mut buf: Vec<(char, Instant)> = Vec::new();
+    let mut backspaces: u32 = 0;
+    let mut start: Option<Instant> = None;
 
     loop {
         // Block waiting for next event.
@@ -69,23 +75,25 @@ fn record_once_inner(cfg: &RecordConfig) -> anyhow::Result<RecordOutcome> {
                     KeyCode::Esc => return Ok(RecordOutcome::Aborted),
                     KeyCode::Enter => break,
                     KeyCode::Backspace => {
-                        if cfg.abort_on_backspace && !phrase.is_empty() {
+                        if cfg.abort_on_backspace && !buf.is_empty() {
                             eprintln!("\n(backspace) sample aborted; please retype\n");
                             return Ok(RecordOutcome::Aborted);
                         }
+                        backspaces = backspaces.saturating_add(1);
+                        if !buf.is_empty() {
+                            buf.pop();
+                            // best-effort echo: backspace + space + backspace to erase
+                            eprint!("\u{8} \u{8}");
+                        }
                     }
                     KeyCode::Char(c) => {
-                        if phrase.chars().count() >= cfg.max_len {
+                        if buf.len() >= cfg.max_len {
                             eprintln!("\n(max_len reached) sample aborted\n");
                             return Ok(RecordOutcome::Aborted);
                         }
                         let now = Instant::now();
-                        if let Some(prev) = last {
-                            let dt = now.duration_since(prev);
-                            dts_ms.push(dt.as_secs_f32() * 1000.0);
-                        }
-                        last = Some(now);
-                        phrase.push(c);
+                        start.get_or_insert(now);
+                        buf.push((c, now));
                         // best-effort echo (raw mode means terminal may not echo)
                         eprint!("{c}");
                     }
@@ -97,15 +105,21 @@ fn record_once_inner(cfg: &RecordConfig) -> anyhow::Result<RecordOutcome> {
     }
 
     eprintln!();
-    if phrase.is_empty() {
+    if buf.is_empty() {
         return Ok(RecordOutcome::Aborted);
     }
-    // Validate timing length.
-    let n = phrase.chars().count();
-    if dts_ms.len() != n.saturating_sub(1) {
-        // This can happen if non-char keys were pressed; treat as abort.
-        eprintln!("(warning) timing length mismatch; sample discarded");
-        return Ok(RecordOutcome::Aborted);
+    let phrase: String = buf.iter().map(|(c, _)| *c).collect();
+    let end = Instant::now();
+    let total_ms = start.map(|t0| end.duration_since(t0).as_secs_f32() * 1000.0);
+
+    // Digraph dt(ms) derived from the retained character timestamps.
+    // Note: if backspace is allowed, these timings can include correction overhead.
+    let mut dts_ms: Vec<f32> = Vec::new();
+    if buf.len() >= 2 {
+        for i in 0..(buf.len() - 1) {
+            let dt = buf[i + 1].1.duration_since(buf[i].1).as_secs_f32() * 1000.0;
+            dts_ms.push(dt);
+        }
     }
 
     if let Some(t) = &cfg.target {
@@ -123,6 +137,12 @@ fn record_once_inner(cfg: &RecordConfig) -> anyhow::Result<RecordOutcome> {
     Ok(RecordOutcome::Recorded(Row {
         phrase,
         digraph_dt_ms: dts_ms,
+        total_ms,
+        backspaces: if backspaces == 0 {
+            None
+        } else {
+            Some(backspaces)
+        },
         source: Some("user_terminal".to_string()),
         note: Some(format!("ts_ms={ts_ms}")),
     }))

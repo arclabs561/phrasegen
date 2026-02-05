@@ -11,6 +11,7 @@ fn fit_and_score_smoke() {
         FitConfig {
             min_count: 1,
             clamp_dt_ms: None,
+            allow_corrections: false,
         },
     );
     assert!(stats.rows >= 1);
@@ -27,6 +28,7 @@ fn model_roundtrip_json() {
         FitConfig {
             min_count: 1,
             clamp_dt_ms: None,
+            allow_corrections: false,
         },
     );
 
@@ -47,12 +49,19 @@ fn adapt_model_smoke() {
         FitConfig {
             min_count: 1,
             clamp_dt_ms: None,
+            allow_corrections: false,
         },
     );
-    let (tuned, stats) = adapt_digraph_model(&base, &rows, AdaptConfig { prior_count: 1.0, min_new_count: 1 });
+    let (tuned, stats) = adapt_digraph_model(
+        &base,
+        &rows,
+        AdaptConfig {
+            prior_count: 1.0,
+            min_new_count: 1,
+        },
+    );
     assert!(stats.user_rows >= 1);
     // Should still be able to score.
     let s = score_phrase(&tuned, "hello world");
     assert!(s.predicted_ms >= 0.0);
 }
-

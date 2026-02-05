@@ -10,6 +10,17 @@ use serde::{Deserialize, Serialize};
 pub struct Row {
     pub phrase: String,
     pub digraph_dt_ms: Vec<f32>,
+    /// Optional total elapsed time (ms) from first keypress to Enter.
+    ///
+    /// Present for rows recorded via `record-session`; absent for most imported datasets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_ms: Option<f32>,
+    /// Optional count of backspace keypresses during entry.
+    ///
+    /// When this is > 0, the digraph timings may include correction overhead and are typically
+    /// not used for fitting the clean digraph timing model by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backspaces: Option<u32>,
     /// Optional provenance tag (e.g. "cmu_dsl", "bksd_phrase_en").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
@@ -61,6 +72,8 @@ fn load_rows_csv(path: &Path) -> Result<Vec<Row>, DataError> {
         out.push(Row {
             phrase: rec.phrase,
             digraph_dt_ms,
+            total_ms: None,
+            backspaces: None,
             source: None,
             note: None,
         });

@@ -70,7 +70,8 @@ pub mod greyc_web {
             source: Option<String>,
             note: Option<String>,
         }
-        let mut bundles: std::collections::HashMap<String, Bundle> = std::collections::HashMap::new();
+        let mut bundles: std::collections::HashMap<String, Bundle> =
+            std::collections::HashMap::new();
 
         let mut rows_written = 0usize;
 
@@ -97,7 +98,9 @@ pub mod greyc_web {
             }
 
             // We key by session directory (everything up to the filename).
-            let Some((dir, file)) = path.rsplit_once('/') else { continue };
+            let Some((dir, file)) = path.rsplit_once('/') else {
+                continue;
+            };
             let key = dir.to_string();
 
             let b = bundles.entry(key.clone()).or_default();
@@ -158,6 +161,8 @@ pub mod greyc_web {
             let row = Row {
                 phrase: text,
                 digraph_dt_ms: p_pp,
+                total_ms: None,
+                backspaces: None,
                 source: b.source.clone(),
                 note: b.note.clone(),
             };
@@ -245,6 +250,8 @@ pub mod cmu_dsl {
             out.push(Row {
                 phrase: PHRASE.to_string(),
                 digraph_dt_ms,
+                total_ms: None,
+                backspaces: None,
                 source: Some("cmu_dsl".to_string()),
                 note: None,
             });
@@ -278,7 +285,8 @@ pub mod cmu_dsl {
 pub mod cmu_laser2012 {
     use super::*;
 
-    const DEFAULT_URL: &str = "https://www.cs.cmu.edu/~keystroke/laser-2012/DSL-Free-vs-Transcribed.zip";
+    const DEFAULT_URL: &str =
+        "https://www.cs.cmu.edu/~keystroke/laser-2012/DSL-Free-vs-Transcribed.zip";
 
     pub fn default_url() -> &'static str {
         DEFAULT_URL
@@ -305,9 +313,10 @@ pub mod cmu_laser2012 {
             }
         }
 
-        let dd_text = dd_text.ok_or_else(|| anyhow::anyhow!("missing data/TimingFeatures-DD.txt in LASER zip"))?;
-        let session_map_text =
-            session_map_text.ok_or_else(|| anyhow::anyhow!("missing data/SessionMap.txt in LASER zip"))?;
+        let dd_text = dd_text
+            .ok_or_else(|| anyhow::anyhow!("missing data/TimingFeatures-DD.txt in LASER zip"))?;
+        let session_map_text = session_map_text
+            .ok_or_else(|| anyhow::anyhow!("missing data/SessionMap.txt in LASER zip"))?;
         let sess_kind = parse_session_map(&session_map_text);
 
         let mut out = Vec::new();
@@ -317,7 +326,8 @@ pub mod cmu_laser2012 {
                 continue;
             }
             // header
-            if lineno == 0 && line.to_ascii_lowercase().contains("subject") && line.contains("key1") {
+            if lineno == 0 && line.to_ascii_lowercase().contains("subject") && line.contains("key1")
+            {
                 continue;
             }
             let cols: Vec<&str> = line.split_whitespace().collect();
@@ -360,6 +370,8 @@ pub mod cmu_laser2012 {
             out.push(Row {
                 phrase,
                 digraph_dt_ms: vec![dt_ms],
+                total_ms: None,
+                backspaces: None,
                 source: Some(source),
                 note: Some(note),
             });
@@ -379,7 +391,9 @@ pub mod cmu_laser2012 {
             }
             let mut it = line.split_whitespace();
             let Some(user) = it.next() else { continue };
-            let Some(sess) = it.next().and_then(|s| s.parse::<u32>().ok()) else { continue };
+            let Some(sess) = it.next().and_then(|s| s.parse::<u32>().ok()) else {
+                continue;
+            };
             let rest = line.to_ascii_lowercase();
             let kind = if rest.contains(" - free") {
                 "free"
@@ -429,7 +443,8 @@ pub mod keyrecs {
     use super::*;
 
     const FREE_TEXT_URL: &str = "https://zenodo.org/records/7886743/files/free-text.csv?download=1";
-    const FIXED_TEXT_URL: &str = "https://zenodo.org/records/7886743/files/fixed-text.csv?download=1";
+    const FIXED_TEXT_URL: &str =
+        "https://zenodo.org/records/7886743/files/fixed-text.csv?download=1";
 
     pub fn free_text_url() -> &'static str {
         FREE_TEXT_URL
@@ -462,7 +477,8 @@ pub mod keyrecs {
                 Some(s) if !s.is_empty() => s,
                 _ => continue,
             };
-            let session: u32 = match get(&rec, &idx, "session").and_then(|s| s.parse::<u32>().ok()) {
+            let session: u32 = match get(&rec, &idx, "session").and_then(|s| s.parse::<u32>().ok())
+            {
                 Some(v) => v,
                 None => continue,
             };
@@ -474,10 +490,11 @@ pub mod keyrecs {
                 Some(s) if !s.is_empty() => s,
                 _ => continue,
             };
-            let dd_s: f32 = match get(&rec, &idx, "DD.key1.key2").and_then(|s| s.parse::<f32>().ok()) {
-                Some(v) => v,
-                None => continue,
-            };
+            let dd_s: f32 =
+                match get(&rec, &idx, "DD.key1.key2").and_then(|s| s.parse::<f32>().ok()) {
+                    Some(v) => v,
+                    None => continue,
+                };
             if !dd_s.is_finite() || dd_s < 0.0 {
                 // Some rows appear to encode non-physical ordering (e.g., Shift interactions) and can be negative.
                 continue;
@@ -493,6 +510,8 @@ pub mod keyrecs {
             out.push(Row {
                 phrase: format!("{a}{b}"),
                 digraph_dt_ms: vec![dt_ms],
+                total_ms: None,
+                backspaces: None,
                 source: Some("keyrecs_free_text".to_string()),
                 note: Some(format!("participant={participant} session={session}")),
             });
@@ -538,7 +557,11 @@ pub mod keyrecs {
 pub mod bksd {
     use super::*;
 
-    pub fn parse_csv_bytes(bytes: &[u8], source: &str, note: Option<String>) -> anyhow::Result<Vec<Row>> {
+    pub fn parse_csv_bytes(
+        bytes: &[u8],
+        source: &str,
+        note: Option<String>,
+    ) -> anyhow::Result<Vec<Row>> {
         let mut rdr = csv::Reader::from_reader(bytes);
         let headers = rdr.headers()?.clone();
         let dd_cols = dd_columns_in_order(&headers)?;
@@ -563,6 +586,8 @@ pub mod bksd {
             out.push(Row {
                 phrase,
                 digraph_dt_ms,
+                total_ms: None,
+                backspaces: None,
                 source: Some(source.to_string()),
                 note: note.clone(),
             });
@@ -592,9 +617,15 @@ pub mod bksd {
         // Find header fields like "DD.1_2", "DD.10_11", etc. and sort by the left index.
         let mut cols: Vec<(usize, usize)> = Vec::new(); // (i_left, col_idx)
         for (idx, h) in headers.iter().enumerate() {
-            let Some(rest) = h.strip_prefix("DD.") else { continue };
-            let Some((a, _b)) = rest.split_once('_') else { continue };
-            let Ok(i_left) = a.parse::<usize>() else { continue };
+            let Some(rest) = h.strip_prefix("DD.") else {
+                continue;
+            };
+            let Some((a, _b)) = rest.split_once('_') else {
+                continue;
+            };
+            let Ok(i_left) = a.parse::<usize>() else {
+                continue;
+            };
             cols.push((i_left, idx));
         }
         cols.sort_by_key(|(i_left, _)| *i_left);
@@ -622,8 +653,8 @@ pub mod bksd {
 
 #[cfg(test)]
 mod tests {
-    use super::cmu_dsl;
     use super::bksd;
+    use super::cmu_dsl;
 
     #[test]
     fn cmu_parse_smoke() {
@@ -647,7 +678,12 @@ mod tests {
             "10,100,90,20,200,180,999,foo",
         ]
         .join("\n");
-        let rows = bksd::parse_csv_bytes(csv.as_bytes(), "bksd_phrase_en", Some("S65e-ksd.csv".to_string())).unwrap();
+        let rows = bksd::parse_csv_bytes(
+            csv.as_bytes(),
+            "bksd_phrase_en",
+            Some("S65e-ksd.csv".to_string()),
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].digraph_dt_ms.len(), 2);
         assert_eq!(rows[0].digraph_dt_ms[0], 100.0);
@@ -658,4 +694,3 @@ mod tests {
         assert_eq!(rows[0].phrase.chars().count(), 3);
     }
 }
-

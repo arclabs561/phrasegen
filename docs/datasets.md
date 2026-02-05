@@ -5,7 +5,7 @@ The base pipeline unions multiple public keystroke datasets and fits a single di
 ## Policy: what we store and commit
 
 - Raw downloads and generated unions/models live under `data/` and are **ignored by git** by default.
-- The repo commits only small, deterministic examples (e.g. `data/example.csv`) so tests and formats have something stable.
+- The repo commits only small, deterministic examples (e.g. `data/example.csv`, `data/wordlist.txt`) so tests and formats have something stable.
 
 ## Download + union
 

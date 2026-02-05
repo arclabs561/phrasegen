@@ -46,11 +46,16 @@ pub fn adapt_digraph_model(
     cfg: AdaptConfig,
 ) -> (DigraphModel, AdaptStats) {
     let mut sum: HashMap<String, f32> = HashMap::new();
+    // Best-effort: keep variances from base rather than attempting to infer posterior variance.
+    // (We don't track user sum_sq here, and the Bayesian update is only on the mean.)
     let mut cnt: HashMap<String, usize> = HashMap::new();
     let mut global_sum = 0.0f32;
     let mut global_cnt = 0usize;
 
     for row in user_rows {
+        if row.backspaces.unwrap_or(0) > 0 {
+            continue;
+        }
         let grams = graphemes_normalized(&row.phrase);
         let n = grams.len();
         if n < 2 {
@@ -90,12 +95,16 @@ pub fn adapt_digraph_model(
 
     let mut out_means: HashMap<String, f32> = HashMap::new();
     let mut out_counts: HashMap<String, u32> = HashMap::new();
+    let mut out_var: HashMap<String, f32> = HashMap::new();
 
     // Always keep base keys.
     for (k, &mu0) in base.mean_map().iter() {
         let n = cnt.get(k).copied().unwrap_or(0);
         if n == 0 {
             out_means.insert(k.clone(), mu0);
+            if let Some(&v0) = base.var_map().get(k) {
+                out_var.insert(k.clone(), v0.max(0.0));
+            }
             // Preserve base counts if present.
             let c0 = base.count_for_key(k);
             if c0 > 0 {
@@ -112,6 +121,9 @@ pub fn adapt_digraph_model(
         };
         let mu = (n0 * mu0 + s) / (n0 + (n as f32));
         out_means.insert(k.clone(), mu);
+        if let Some(&v0) = base.var_map().get(k) {
+            out_var.insert(k.clone(), v0.max(0.0));
+        }
         // Posterior count: real base count (not pseudo) + user count (clamped to u32).
         let c0 = base.count_for_key(k) as u64;
         let c1 = n as u64;
@@ -130,14 +142,19 @@ pub fn adapt_digraph_model(
         let mu0 = base_global;
         let mu = (prior_c * mu0 + s) / (prior_c + (n as f32));
         out_means.insert(k.clone(), mu);
+        if base.global_var_ms2() > 0.0 {
+            out_var.insert(k.clone(), base.global_var_ms2());
+        }
         out_counts.insert(k.clone(), (n.min(u32::MAX as usize)) as u32);
         added += 1;
     }
 
     (
-        DigraphModel::from_parts_with_counts(
+        DigraphModel::from_parts_with_stats(
             out_means,
+            out_var,
             tuned_global,
+            base.global_var_ms2(),
             out_counts,
             base.global_count().saturating_add(global_cnt as u64),
         ),

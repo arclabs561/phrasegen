@@ -14,7 +14,7 @@ default:
 
 # Build the full public-data base pipeline into OUT_DIR.
 base OUT_DIR="data/base":
-  cargo run -- base-pipeline --out-dir {{OUT_DIR}} --target-bits 60 --words 4 --samples 20000 --top 10 --seed 1
+  cargo run -- base-pipeline --out-dir {{OUT_DIR}} --target-bits 60 --words 4 --samples 20000 --top 10
 
 # Demo: repeatable sampling with seed=42 (default style: numbers-symbols).
 demo STYLE="numbers-symbols" SEED="42" COUNT="10" MAX_CHARS="32" PICK="1":
@@ -42,7 +42,7 @@ audit OUT_DIR="data/base":
 
 # Pareto compare 1Password-like styles (bits vs ms_p95).
 pareto OUT_DIR="data/base":
-  cargo run -- pareto-styles --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --words 4 --samples 5000 --n 1024,4096,16384,32768 --style hyphens,numbers,numbers-symbols,login-title-2digits --seed 1 --recommend --target-bits 60 --min-hit-frac 0.70
+  cargo run -- pareto-styles --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --words 4 --samples 5000 --n 1024,4096,16384,32768 --style spaces,hyphens,numbers,numbers-symbols,login-title-2digits,login-title-endpunct --seed 1 --recommend --target-bits 60 --min-hit-frac 0.70
 
 # Analyze the actual generator distribution (incl. “pick best of M” entropy penalty).
 # Usage:
@@ -53,12 +53,18 @@ analyze OUT_DIR="data/base" STYLE="numbers-symbols" PICK="5" MAX_CHARS="28":
 # Run “everything” on a base directory (pareto + generator analyses).
 doitall OUT_DIR="data/base" SAMPLES="20000" PICK="10" MAX_CHARS="28":
   just pareto {{OUT_DIR}}
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style spaces --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style spaces --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style hyphens --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style hyphens --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style numbers --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style numbers --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style numbers-symbols --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style numbers-symbols --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style login-title-2digits --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
   cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style login-title-2digits --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style login-title-endpunct --words 4 --samples {{SAMPLES}} --pick-best-of 1 --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
+  cargo run -- analyze-generator --model {{OUT_DIR}}/model_union.json --wordlist {{OUT_DIR}}/wordset.txt --style login-title-endpunct --words 4 --samples {{SAMPLES}} --pick-best-of {{PICK}} --max-chars {{MAX_CHARS}} --seed 1 --show-top 5
 
 # Show dataset stats/outliers.
 stats INPUT="data/union.jsonl":
@@ -82,32 +88,32 @@ build-personalized BASE_DIR="data/base" USER_JSONL="data/user/user.jsonl" OUT_MO
 
 # One-shot personalize pipeline (also writes model_personalized.json in OUT_DIR).
 personalize BASE_DIR="data/base" OUT_DIR="data/user":
-  cargo run -- personalize-pipeline --base-dir {{BASE_DIR}} --user-data {{OUT_DIR}}/user.jsonl --out-dir {{OUT_DIR}} --target-bits 60 --words 4 --seed 1
+  cargo run -- personalize-pipeline --base-dir {{BASE_DIR}} --user-data {{OUT_DIR}}/user.jsonl --out-dir {{OUT_DIR}} --target-bits 60 --words 4
 
 # Sample final passphrases with optional regex gaps and max chars.
 sample MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" GAP_REGEX="[-_.]{1,2}[0-9]{0,2}" MAX_CHARS="32":
   @if [ -n "{{GAP_REGEX}}" ]; then \
-    cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --gap-regex '{{GAP_REGEX}}' --max-chars {{MAX_CHARS}} --seed 1; \
+    cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --gap-regex '{{GAP_REGEX}}' --max-chars {{MAX_CHARS}}; \
   else \
-    cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --seed 1; \
+    cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4; \
   fi
 
 # “Login password” style: no spaces, TitleCase each word, append 2 digits.
 login-sample MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" MAX_CHARS="28":
-  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style login-title-2digits --max-chars {{MAX_CHARS}} --seed 2
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style login-title-2digits --max-chars {{MAX_CHARS}}
 
 # 1Password-like “Memorable password” styles.
 # - hyphens: classic correct-horse style, but with our typing model.
 onepass-hyphens MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" MAX_CHARS="32":
-  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style hyphens --max-chars {{MAX_CHARS}} --seed 3
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style hyphens --max-chars {{MAX_CHARS}}
 
 # - numbers: use a random digit as the separator between words.
 onepass-numbers MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" MAX_CHARS="32":
-  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers --max-chars {{MAX_CHARS}} --seed 3
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers --max-chars {{MAX_CHARS}}
 
 # - numbers+symbols: random digit or common symbol separator between words.
 onepass-numsym MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" MAX_CHARS="32":
-  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers-symbols --max-chars {{MAX_CHARS}} --seed 3
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers-symbols --max-chars {{MAX_CHARS}}
 
 # Score the repo name itself.
 score-phrasegen MODEL="data/base/model_union.json":

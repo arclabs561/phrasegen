@@ -1,0 +1,13 @@
+# Minimal example wordlist (one word per line).
+hello
+world
+correct
+horse
+battery
+staple
+alpha
+bravo
+charlie
+delta
+echo
+foxtrot
