@@ -86,7 +86,7 @@ pub fn class_of_grapheme(g: &str) -> CharClass {
     let c = (b[0] as char).to_ascii_lowercase();
     if matches!(c, 'a' | 'e' | 'i' | 'o' | 'u') {
         CharClass::Vowel
-    } else if matches!(c, 'a'..='z') {
+    } else if c.is_ascii_lowercase() {
         CharClass::Consonant
     } else {
         CharClass::Other
@@ -479,7 +479,7 @@ impl TimingModel for PersonalizedModel {
 #[derive(Debug, Clone)]
 pub enum AnyTimingModel {
     Digraph(DigraphModel),
-    Personalized(PersonalizedModel),
+    Personalized(Box<PersonalizedModel>),
 }
 
 impl AnyTimingModel {
@@ -487,7 +487,7 @@ impl AnyTimingModel {
         let bytes = std::fs::read(path)?;
         // Try personalized first (it will fail quickly if fields don't match).
         if let Ok(p) = serde_json::from_slice::<PersonalizedModel>(&bytes) {
-            return Ok(AnyTimingModel::Personalized(p));
+            return Ok(AnyTimingModel::Personalized(Box::new(p)));
         }
         let d: DigraphModel = serde_json::from_slice(&bytes)?;
         Ok(AnyTimingModel::Digraph(d))

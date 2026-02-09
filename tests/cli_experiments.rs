@@ -55,7 +55,7 @@ fn parse_delta(line: &str, key: &str) -> f64 {
         .unwrap_or_else(|| panic!("missing token {key:?} in line: {line:?}"));
     let rest = &line[(idx + key.len())..];
     let end = rest
-        .find(|c: char| c == ' ' || c == '\t')
+        .find(|c: char| [' ', '\t'].contains(&c))
         .unwrap_or(rest.len());
     rest[..end]
         .parse::<f64>()

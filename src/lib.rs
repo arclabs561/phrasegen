@@ -3,6 +3,8 @@
 //! This crate is intentionally small and “dataset-format tolerant”: you can fit a
 //! model from any source as long as you can produce `(phrase, digraph_dt_ms)` rows.
 
+#![forbid(unsafe_code)]
+
 pub mod adapt;
 pub mod corrections;
 pub mod data;

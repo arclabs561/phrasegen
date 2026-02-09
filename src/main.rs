@@ -1050,12 +1050,14 @@ fn main() -> anyhow::Result<()> {
 
             if let Some(ref_wordlist) = ref_wordlist {
                 // Calibrate by sampling random phrases from ref_wordlist and computing mean/std of predicted_ms.
-                let mut gcfg = GenerateConfig::default();
-                gcfg.words = ref_words;
-                gcfg.separator = " ".to_string();
-                gcfg.ascii_lower_only = false;
-                gcfg.min_word_len = 1;
-                gcfg.max_word_len = usize::MAX;
+                let gcfg = GenerateConfig {
+                    words: ref_words,
+                    separator: " ".to_string(),
+                    ascii_lower_only: false,
+                    min_word_len: 1,
+                    max_word_len: usize::MAX,
+                    ..Default::default()
+                };
                 let wl = load_wordlist(&ref_wordlist, &gcfg)
                     .with_context(|| format!("loading ref wordlist: {}", ref_wordlist.display()))?;
 
@@ -1179,14 +1181,15 @@ fn main() -> anyhow::Result<()> {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
 
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = separator;
-            gcfg.samples = samples;
-            gcfg.top_k = top;
-            gcfg.min_word_len = min_word_len;
-            gcfg.max_word_len = max_word_len;
-            gcfg.ascii_lower_only = ascii_lower_only;
+            let gcfg = GenerateConfig {
+                words,
+                separator,
+                samples,
+                top_k: top,
+                min_word_len,
+                max_word_len,
+                ascii_lower_only,
+            };
 
             let wl = load_wordlist(&wordlist, &gcfg)
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
@@ -2004,12 +2007,14 @@ fn main() -> anyhow::Result<()> {
         } => {
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = separator;
-            gcfg.min_word_len = min_word_len;
-            gcfg.max_word_len = max_word_len;
-            gcfg.ascii_lower_only = ascii_lower_only;
+            let gcfg = GenerateConfig {
+                words,
+                separator,
+                min_word_len,
+                max_word_len,
+                ascii_lower_only,
+                ..Default::default()
+            };
             let wl = load_wordlist(&wordlist, &gcfg)
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
 
@@ -2344,13 +2349,15 @@ fn main() -> anyhow::Result<()> {
 
             // Estimate avg ms/phrase for this planned wordset.
             let wl = wordlist_from_vec(chosen)?;
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = separator;
-            // Wordlist already filtered; these only affect downstream printing.
-            gcfg.ascii_lower_only = ascii_lower_only;
-            gcfg.min_word_len = min_word_len;
-            gcfg.max_word_len = max_word_len;
+            let gcfg = GenerateConfig {
+                words,
+                separator,
+                // Wordlist already filtered; these only affect downstream printing.
+                ascii_lower_only,
+                min_word_len,
+                max_word_len,
+                ..Default::default()
+            };
 
             let mut rng = rng_from_seed(seed);
             let (mean_ms, std_ms) = estimate_avg_phrase_ms(&model, &wl, &gcfg, samples, &mut rng)?;
@@ -2672,14 +2679,15 @@ fn main() -> anyhow::Result<()> {
             // 5) generate examples + estimate enumeration time using the planned wordset
             {
                 let model = AnyTimingModel::load_json(&model_json)?;
-                let mut gcfg = GenerateConfig::default();
-                gcfg.words = words;
-                gcfg.separator = " ".to_string();
-                gcfg.samples = samples;
-                gcfg.top_k = top;
-                gcfg.ascii_lower_only = true;
-                gcfg.min_word_len = 3;
-                gcfg.max_word_len = 12;
+                let gcfg = GenerateConfig {
+                    words,
+                    separator: " ".to_string(),
+                    samples,
+                    top_k: top,
+                    ascii_lower_only: true,
+                    min_word_len: 3,
+                    max_word_len: 12,
+                };
 
                 let wl = load_wordlist(&wordset_path, &gcfg)?;
                 let mut rng = rng_from_seed(seed);
@@ -2858,14 +2866,15 @@ fn main() -> anyhow::Result<()> {
             // 3) generate examples + estimate enumeration time using the planned wordset
             {
                 let model = AnyTimingModel::load_json(&personalized_path)?;
-                let mut gcfg = GenerateConfig::default();
-                gcfg.words = words;
-                gcfg.separator = " ".to_string();
-                gcfg.samples = samples;
-                gcfg.top_k = top;
-                gcfg.ascii_lower_only = true;
-                gcfg.min_word_len = 3;
-                gcfg.max_word_len = 12;
+                let gcfg = GenerateConfig {
+                    words,
+                    separator: " ".to_string(),
+                    samples,
+                    top_k: top,
+                    ascii_lower_only: true,
+                    min_word_len: 3,
+                    max_word_len: 12,
+                };
 
                 let wl = load_wordlist(&wordset_path, &gcfg)?;
                 let mut rng = rng_from_seed(seed);
@@ -3464,13 +3473,15 @@ fn main() -> anyhow::Result<()> {
 
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = separator.clone();
-            // We intentionally do not filter here; wordlist should already be curated.
-            gcfg.ascii_lower_only = false;
-            gcfg.min_word_len = 1;
-            gcfg.max_word_len = usize::MAX;
+            let gcfg = GenerateConfig {
+                words,
+                separator: separator.clone(),
+                // We intentionally do not filter here; wordlist should already be curated.
+                ascii_lower_only: false,
+                min_word_len: 1,
+                max_word_len: usize::MAX,
+                ..Default::default()
+            };
             let wl = load_wordlist(&wordlist, &gcfg)
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
 
@@ -4056,12 +4067,14 @@ fn main() -> anyhow::Result<()> {
 
             let model = AnyTimingModel::load_json(&model)
                 .with_context(|| format!("loading model: {}", model.display()))?;
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = separator.clone();
-            gcfg.ascii_lower_only = false;
-            gcfg.min_word_len = 1;
-            gcfg.max_word_len = usize::MAX;
+            let gcfg = GenerateConfig {
+                words,
+                separator: separator.clone(),
+                ascii_lower_only: false,
+                min_word_len: 1,
+                max_word_len: usize::MAX,
+                ..Default::default()
+            };
             let wl = load_wordlist(&wordlist, &gcfg)
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
 
@@ -4826,12 +4839,14 @@ fn main() -> anyhow::Result<()> {
                 .with_context(|| format!("loading model: {}", model.display()))?;
 
             // Load the full ordered wordset (one per line).
-            let mut gcfg = GenerateConfig::default();
-            gcfg.words = words;
-            gcfg.separator = " ".to_string();
-            gcfg.ascii_lower_only = false;
-            gcfg.min_word_len = 1;
-            gcfg.max_word_len = usize::MAX;
+            let gcfg = GenerateConfig {
+                words,
+                separator: " ".to_string(),
+                ascii_lower_only: false,
+                min_word_len: 1,
+                max_word_len: usize::MAX,
+                ..Default::default()
+            };
             let wl = load_wordlist(&wordlist, &gcfg)
                 .with_context(|| format!("loading wordlist: {}", wordlist.display()))?;
             if wl.words.is_empty() {
@@ -5407,12 +5422,14 @@ fn run_plan_passphrase(cmd: Command) -> anyhow::Result<()> {
     }
 
     let wl = wordlist_from_vec(chosen)?;
-    let mut gcfg = GenerateConfig::default();
-    gcfg.words = words;
-    gcfg.separator = separator;
-    gcfg.ascii_lower_only = ascii_lower_only;
-    gcfg.min_word_len = min_word_len;
-    gcfg.max_word_len = max_word_len;
+    let gcfg = GenerateConfig {
+        words,
+        separator,
+        ascii_lower_only,
+        min_word_len,
+        max_word_len,
+        ..Default::default()
+    };
     let mut rng = rng_from_seed(seed);
     let (mean_ms, std_ms) = estimate_avg_phrase_ms(&model, &wl, &gcfg, samples, &mut rng)?;
 
@@ -5478,7 +5495,7 @@ fn load_corpus_counts(
         if w.len() < min_word_len || w.len() > max_word_len {
             continue;
         }
-        if ascii_lower_only && !w.bytes().all(|b| matches!(b, b'a'..=b'z')) {
+        if ascii_lower_only && !w.bytes().all(|b| b.is_ascii_lowercase()) {
             continue;
         }
         *counts.entry(w).or_insert(0) += count;

@@ -23,8 +23,8 @@ fn solve_3x3(mut a: [[f64; 3]; 3], mut b: [f64; 3]) -> Option<[f64; 3]> {
         // Pivot.
         let mut p = i;
         let mut best = a[i][i].abs();
-        for r in (i + 1)..3 {
-            let v = a[r][i].abs();
+        for (r, row) in a.iter().enumerate().skip(i + 1) {
+            let v = row[i].abs();
             if v > best {
                 best = v;
                 p = r;
@@ -43,8 +43,9 @@ fn solve_3x3(mut a: [[f64; 3]; 3], mut b: [f64; 3]) -> Option<[f64; 3]> {
             if f == 0.0 {
                 continue;
             }
+            let row_i = a[i];
             for c in i..3 {
-                a[r][c] -= f * a[i][c];
+                a[r][c] -= f * row_i[c];
             }
             b[r] -= f * b[i];
         }

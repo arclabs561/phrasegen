@@ -185,7 +185,7 @@ pub fn estimate_avg_phrase_ms(
 
 fn is_ascii_lower_word(s: &str) -> bool {
     // Allow a-z only (no spaces/hyphens) for wordlist elements.
-    s.bytes().all(|b| matches!(b, b'a'..=b'z'))
+    s.bytes().all(|b| b.is_ascii_lowercase())
 }
 
 /// Convenience for deterministic generation from a seed.

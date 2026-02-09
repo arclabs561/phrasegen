@@ -66,41 +66,38 @@ fn record_once_inner(cfg: &RecordConfig) -> anyhow::Result<RecordOutcome> {
     loop {
         // Block waiting for next event.
         let ev = event::read()?;
-        match ev {
-            Event::Key(k) => {
-                if k.kind != KeyEventKind::Press && k.kind != KeyEventKind::Repeat {
-                    continue;
-                }
-                match k.code {
-                    KeyCode::Esc => return Ok(RecordOutcome::Aborted),
-                    KeyCode::Enter => break,
-                    KeyCode::Backspace => {
-                        if cfg.abort_on_backspace && !buf.is_empty() {
-                            eprintln!("\n(backspace) sample aborted; please retype\n");
-                            return Ok(RecordOutcome::Aborted);
-                        }
-                        backspaces = backspaces.saturating_add(1);
-                        if !buf.is_empty() {
-                            buf.pop();
-                            // best-effort echo: backspace + space + backspace to erase
-                            eprint!("\u{8} \u{8}");
-                        }
-                    }
-                    KeyCode::Char(c) => {
-                        if buf.len() >= cfg.max_len {
-                            eprintln!("\n(max_len reached) sample aborted\n");
-                            return Ok(RecordOutcome::Aborted);
-                        }
-                        let now = Instant::now();
-                        start.get_or_insert(now);
-                        buf.push((c, now));
-                        // best-effort echo (raw mode means terminal may not echo)
-                        eprint!("{c}");
-                    }
-                    _ => {}
-                }
+        if let Event::Key(k) = ev {
+            if k.kind != KeyEventKind::Press && k.kind != KeyEventKind::Repeat {
+                continue;
             }
-            _ => {}
+            match k.code {
+                KeyCode::Esc => return Ok(RecordOutcome::Aborted),
+                KeyCode::Enter => break,
+                KeyCode::Backspace => {
+                    if cfg.abort_on_backspace && !buf.is_empty() {
+                        eprintln!("\n(backspace) sample aborted; please retype\n");
+                        return Ok(RecordOutcome::Aborted);
+                    }
+                    backspaces = backspaces.saturating_add(1);
+                    if !buf.is_empty() {
+                        buf.pop();
+                        // best-effort echo: backspace + space + backspace to erase
+                        eprint!("\u{8} \u{8}");
+                    }
+                }
+                KeyCode::Char(c) => {
+                    if buf.len() >= cfg.max_len {
+                        eprintln!("\n(max_len reached) sample aborted\n");
+                        return Ok(RecordOutcome::Aborted);
+                    }
+                    let now = Instant::now();
+                    start.get_or_insert(now);
+                    buf.push((c, now));
+                    // best-effort echo (raw mode means terminal may not echo)
+                    eprint!("{c}");
+                }
+                _ => {}
+            }
         }
     }
 
