@@ -115,6 +115,35 @@ onepass-numbers MODEL="data/user/model_personalized.json" WORDSET="data/user/wor
 onepass-numsym MODEL="data/user/model_personalized.json" WORDSET="data/user/wordset_user.txt" COUNT="10" MAX_CHARS="32":
   cargo run -- sample-passphrases --model {{MODEL}} --wordlist {{WORDSET}} --count {{COUNT}} --words 4 --style numbers-symbols --max-chars {{MAX_CHARS}}
 
+# ── Memorable passphrases (EFF long wordlist) ──────────────────────────────────
+#
+# The EFF large wordlist (7776 real English words) produces passphrases that are
+# recognisable and easy to recall.  Use 5 words for ~65 bits.
+#
+# Run once to fetch the wordlist:
+#   just eff-fetch
+# Then sample:
+#   just eff-sample            (hyphens, 5 words, base model)
+#   just eff-sample-login      (TitleCase+2digits, login-box friendly)
+#   just eff-sample-diceware   (space-separated, closest to original Diceware)
+
+# Fetch + strip the EFF large wordlist.
+eff-fetch:
+  curl -sf "https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt" | awk '{print $2}' > data/eff_wordlist.txt
+  @echo "Saved data/eff_wordlist.txt ($(wc -l < data/eff_wordlist.txt) words)"
+
+# Sample memorable hyphens-style passphrases from the EFF wordlist (~65 bits, 5 words).
+eff-sample MODEL="data/base/model_union.json" COUNT="10":
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist data/eff_wordlist.txt --words 5 --count {{COUNT}} --style hyphens
+
+# Login-box style: TitleCase words concatenated + 2 trailing digits (~65 bits).
+eff-sample-login MODEL="data/base/model_union.json" COUNT="10" MAX_CHARS="36":
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist data/eff_wordlist.txt --words 5 --count {{COUNT}} --style login-title-2digits --max-chars {{MAX_CHARS}}
+
+# Classic Diceware-style: space-separated lowercase (~65 bits).
+eff-sample-diceware MODEL="data/base/model_union.json" COUNT="10":
+  cargo run -- sample-passphrases --model {{MODEL}} --wordlist data/eff_wordlist.txt --words 5 --count {{COUNT}} --style spaces
+
 # Score the repo name itself.
 score-phrasegen MODEL="data/base/model_union.json":
   cargo run -- score --model {{MODEL}} --phrase phrasegen

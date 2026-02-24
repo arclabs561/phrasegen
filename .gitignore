@@ -3,6 +3,7 @@ target/
 data/**
 !data/example.csv
 !data/wordlist.txt
+!data/eff_wordlist.txt
 artifacts/
 .DS_Store
 .env

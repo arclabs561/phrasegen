@@ -207,18 +207,20 @@ pub fn fit_digraph_model(rows: &[Row], cfg: FitConfig) -> (DigraphModel, FitStat
         }
     }
 
-    let global_mean_ms = if global_cnt == 0 {
-        0.0
+    let global_mean_f64 = if global_cnt == 0 {
+        0.0f64
     } else {
-        (global_sum / (global_cnt as f64)) as f32
+        global_sum / (global_cnt as f64)
     };
+    let global_mean_ms = global_mean_f64 as f32;
     let global_var_ms2 = if global_cnt == 0 {
         0.0
     } else {
         let n = global_cnt as f64;
-        let mu = global_mean_ms as f64;
         let ex2 = global_sum_sq / n;
-        ((ex2 - mu * mu).max(0.0)) as f32
+        // Use full-precision mean (not the f32-rounded global_mean_ms) to avoid
+        // catastrophic cancellation when ex2 ≈ mu^2.
+        ((ex2 - global_mean_f64 * global_mean_f64).max(0.0)) as f32
     };
 
     let distinct_digraphs = cnt.len();
