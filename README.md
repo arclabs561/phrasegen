@@ -76,38 +76,7 @@ The default `plan-passphrase` command builds a wordset by **typing speed only**,
 
 The ~8 bit tradeoff (52 vs 60 with 4 words) is worth it for memorability; use 5 EFF words to recover the bits.
 
-## Deterministic demo output (seed=42)
-
-If you want stable, copy/pastable examples for docs/issues, use the built-in demo recipe:
-
-```bash
-# Default: numbers-symbols, seed=42
-just demo
-
-# “Best-of-N” demo: for each printed sample, draw N candidates and keep the fastest one.
-# (This intentionally biases the distribution; it’s for showcasing faster examples.)
-just demo numbers-symbols 42 10 32 10
-```
-
-Behind the scenes this runs:
-
-```bash
-cargo run -- sample-passphrases \
-  --model data/user/model_personalized.json \
-  --wordlist data/user/wordset_user.txt \
-  --style numbers-symbols \
-  --seed 42 \
-  --pick-best-of 10
-```
-
-## Docs (next stop)
-
-Start at `docs/README.md`, or jump directly:
-- `docs/guide.md`: how to run it day-to-day (constraints, styles, diagnostics)
-- `docs/datasets.md`: what we download and how it becomes rows
-- `docs/math.md`: equations + interpretation notes
-- `docs/experiments.md`: reproducible experiments + how to scale them up
-- `docs/security.md`: attacker model + what “bits” means here
+Deterministic output for docs/issues: `just demo` (uses `--seed 42`). See `docs/` for the guide, dataset details, math, experiments, and security model.
 
 ## Public data sources (base model)
 
