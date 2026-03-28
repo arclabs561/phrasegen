@@ -1,9 +1,6 @@
 # phrasegen
 
-Generate and score passphrase-style strings using a learned **typing-timing model** (digraph latencies), so you can trade off **security bits** vs **predicted entry time**.
-
-This repo is designed to “just work” from public datasets, and optionally adapt to your own typing over time.
-The intent is practical: make the speed/security tradeoff explicit, measurable, and repeatable.
+Phrase generation and extraction.
 
 ## Requirements
 
