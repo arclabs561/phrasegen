@@ -1,6 +1,8 @@
 # phrasegen
 
-Phrase generation and extraction.
+Generate fast-to-type passphrases from keystroke timing models.
+
+Fits digraph timing models from public keystroke datasets, then samples passphrases that minimize typing time for a given entropy budget. Supports personalization from your own recordings.
 
 ## Requirements
 
