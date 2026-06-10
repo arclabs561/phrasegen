@@ -1849,7 +1849,7 @@ fn main() -> anyhow::Result<()> {
                         })
                     })
                     .collect();
-                worst.sort_by(|a, b| b.bs.cmp(&a.bs));
+                worst.sort_by_key(|w| std::cmp::Reverse(w.bs));
                 if !worst.is_empty() {
                     println!("top_backspace_rows:");
                     for (i, w) in worst.into_iter().take(10).enumerate() {
@@ -3216,7 +3216,7 @@ fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|(k, a)| (k.clone(), a.n))
                 .collect();
-            sources.sort_by(|a, b| b.1.cmp(&a.1));
+            sources.sort_by_key(|s| std::cmp::Reverse(s.1));
 
             println!("by_source (digraph mae/rmse, phrase mae/rmse):");
             for (k, _n) in sources.iter().take(12) {
