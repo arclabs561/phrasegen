@@ -2093,7 +2093,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "textprep"
-version = "0.1.6"
