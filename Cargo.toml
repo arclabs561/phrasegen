@@ -9,7 +9,6 @@ authors = ["Arc <attobop@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/arclabs561/phrasegen"
 homepage = "https://github.com/arclabs561/phrasegen"
-documentation = "https://docs.rs/phrasegen"
 description = "Learn typing-timing models and generate/score fast-to-type passphrases"
 publish = false
 

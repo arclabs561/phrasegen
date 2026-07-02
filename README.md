@@ -11,7 +11,7 @@ Fits digraph timing models from public keystroke datasets, then samples passphra
 
 ## Install
 
-From the repo root:
+This CLI is not published to crates.io. Install from a checkout:
 
 ```bash
 cargo install --path .
@@ -19,7 +19,7 @@ cargo install --path .
 
 ## Quick start (what to run)
 
-### Option A — Memorable passphrases right now (recommended starting point)
+### Option A — EFF wordlist
 
 Uses the [EFF large wordlist](https://www.eff.org/dice) (7776 real English words) with the base timing model.
 5 words → ~65 bits. No recording required.
@@ -46,7 +46,7 @@ just eff-sample-diceware
 # e.g.  jinx ligament banter jokester glory
 ```
 
-### Option B — Personalised model (better timing predictions for your hands)
+### Option B — Personalised model
 
 ```bash
 # 1) Record your typing (20 samples, appends to data/user/user.jsonl)
@@ -90,4 +90,3 @@ See the CLI (`download-datasets`, `union-datasets`) and the code in `src/import.
 - **Recipes**: `just --list` (see `justfile`)
 - **Tests**: `cargo test`
 - **CI**: `.github/workflows/ci.yml`
-
