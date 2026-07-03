@@ -19,7 +19,7 @@ cargo install --path .
 
 ## Quick start (what to run)
 
-### Option A — EFF wordlist
+### Option A: EFF wordlist
 
 Uses the [EFF large wordlist](https://www.eff.org/dice) (7776 real English words) with the base timing model.
 5 words → ~65 bits. No recording required.
@@ -31,7 +31,7 @@ just base data/base
 # 2) Fetch the EFF wordlist (one-time, ~50 KB)
 just eff-fetch
 
-# 3) Sample — hyphens style
+# 3) Sample (hyphens style)
 just eff-sample
 # e.g.  jinx-ligament-banter-jokester-glory
 #       bunny-snooper-cork-reconvene-constant
@@ -46,7 +46,7 @@ just eff-sample-diceware
 # e.g.  jinx ligament banter jokester glory
 ```
 
-### Option B — Personalised model
+### Option B: Personalised model
 
 ```bash
 # 1) Record your typing (20 samples, appends to data/user/user.jsonl)
@@ -69,7 +69,7 @@ Notes:
 
 ## Why EFF over the default wordset?
 
-The default `plan-passphrase` command builds a wordset by **typing speed only**, which produces short fast-to-type fragments like "nba", "usee", "mma" — good entropy, but obscure and hard to recall. The EFF large wordlist contains 7776 common English words chosen to be unambiguous when spoken aloud or typed from memory. 5 EFF words give ~65 bits; 4 give ~52 bits.
+The default `plan-passphrase` command builds a wordset by **typing speed only**, which produces short fast-to-type fragments like "nba", "usee", "mma": good entropy, but obscure and hard to recall. The EFF large wordlist contains 7776 common English words chosen to be unambiguous when spoken aloud or typed from memory. 5 EFF words give ~65 bits; 4 give ~52 bits.
 
 | Wordset | Bits (4w) | Bits (5w) | Example |
 |---|---|---|---|
