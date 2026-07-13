@@ -90,3 +90,8 @@ See the CLI (`download-datasets`, `union-datasets`) and the code in `src/import.
 - **Recipes**: `just --list` (see `justfile`)
 - **Tests**: `cargo test`
 - **CI**: `.github/workflows/ci.yml`
+
+## License
+
+Licensed under either the [Apache License, Version 2.0](LICENSE-APACHE) or
+the [MIT license](LICENSE-MIT), at your option.
