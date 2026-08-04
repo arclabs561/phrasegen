@@ -15,7 +15,10 @@ repository:
   delete_branch_on_merge: true
 
   topics:
-    - passphrase
     - keystroke-dynamics
-    - typing-model
+    - nlp
+    - passphrase
     - password-generator
+    - phrase-generation
+    - rust
+    - typing-model
