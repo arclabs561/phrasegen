@@ -2,7 +2,7 @@
 
 Generate fast-to-type passphrases from keystroke timing models.
 
-Fits digraph timing models from public keystroke datasets, then samples passphrases that minimize typing time for a given entropy budget. Supports personalization from your own recordings.
+Fits digraph timing models from public keystroke datasets, then samples and scores passphrases for a given entropy budget. With `--pick-best-of` greater than 1, it selects the fastest-scoring candidate from each batch. Supports personalization from your own recordings.
 
 ## Requirements
 
